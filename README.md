@@ -1,25 +1,45 @@
 # Plywise Chessboard
 
-A framework-agnostic chessboard renderer with a small React adapter.
+A framework-agnostic, dependency-free chessboard renderer with a small React adapter. The renderer owns DOM updates and exposes a controlled interactive surface; the caller owns chess rules, FEN/PGN parsing, move legality, game state, and annotation semantics.
 
 ## Packages
 
-- `@plywise/chessboard`: DOM renderer and its TypeScript interface.
-- `@plywise/chessboard-react`: lifecycle adapter for React.
+- `@plywise/chessboard`: DOM renderer and its TypeScript interface. Zero runtime dependencies.
+- `@plywise/chessboard-react`: lifecycle adapter for React 18 and 19.
 
-The renderer owns DOM updates. React supplies positions and configuration; it does not render individual squares or pieces.
+The renderer owns its DOM subtree. React supplies positions, marks, annotations, layer visibility, and interaction policy through props; it never owns individual squares, pieces, or annotation nodes.
 
 ## Architecture
 
 ```text
 packages/
   chessboard/        framework-agnostic renderer
-  chessboard-react/  React adapter
+  chessboard-react/  React lifecycle adapter
 examples/
-  react/             browser smoke test and usage example
+  react/             browser example and Playwright smoke consumer
 ```
 
-Chess rules, FEN/PGN parsing, move validation, and game state belong to the caller. A position is a map from squares to pieces. `move` applies a caller-approved move and preserves the moving DOM node; `set` handles arbitrary position or orientation changes.
+## Responsibility boundary
+
+The renderer is intentionally narrow. It does not implement any of the following; the caller must:
+
+- parse FEN, PGN, or any other position serialisation;
+- know chess rules, compute legal destinations, or detect check, checkmate, stalemate, repetition, draws, time forfeit, or clocks;
+- track game trees, move numbering, turns, premoves, or ghost pieces;
+- interpret annotation metadata (engine source, evaluation, confidence, training concept, assistant explanation, opening reference, debug flag);
+- accept or reject moves on the renderer's behalf.
+
+What the renderer does:
+
+- render a caller-supplied `Position` in white or black orientation;
+- convert pointer coordinates into squares using the current board rectangle and orientation;
+- expose a single structured event callback for selection changes and move intentions;
+- draw caller-supplied selection, destination, last-move, and check marks without allocating 64 square nodes;
+- reconcile keyed arrow and circle annotations by stable identifier;
+- theme the board, pieces, marks, and annotation colors through documented CSS custom properties;
+- follow its host element's geometry responsively without a resize callback;
+- preserve the moving DOM node across caller-approved moves and capture only the captured node;
+- remain JSON-compatible internally (`BoardSnapshot`/`BoardCommand`) so a future constrained adapter can describe state without scraping pixels or DOM, without exposing either type publicly today.
 
 ## Usage
 
@@ -32,8 +52,22 @@ const position = new Map([
   ["e8", { color: "black", role: "king" }],
 ]);
 
-const board = createChessboard(element, { position });
-board.move("e1", "e2");
+const board = createChessboard(element, {
+  position,
+  interaction: {
+    destinations: new Map([
+      ["e1", ["e2"]],
+    ]),
+    onEvent: (event) => {
+      if (event.type === "move") {
+        // Decide whether to accept. Reject by doing nothing.
+        if (legal(event.from, event.to)) board.move(event.from, event.to);
+      }
+    },
+  },
+});
+
+board.set({ orientation: "black" });
 board.destroy();
 ```
 
@@ -41,10 +75,130 @@ board.destroy();
 import "@plywise/chessboard/style.css";
 import { Chessboard } from "@plywise/chessboard-react";
 
-export function Board({ position }) {
-  return <Chessboard position={position} />;
+export function Board({ position, onMove, lastMove }) {
+  return (
+    <Chessboard
+      position={position}
+      interaction={{
+        destinations,
+        onEvent: onMove,
+      }}
+      presentation={{ lastMove, checked }}
+      annotations={annotations}
+      visibleLayers={visibleLayers}
+    />
+  );
 }
 ```
+
+## Controlled interaction model
+
+The renderer never accepts a move on the caller's behalf. Pointer gestures express an **intention**; only the caller's subsequent `move` or `set({ position })` mutates authoritative state.
+
+- Pointer Events are the only input source. Mouse, touch, and pen share one path through `setPointerCapture`.
+- Selecting a square whose source is in `interaction.destinations` emits `{ type: "select", square, origin: "pointer" }`.
+- Selecting the active source again, a non-source square, or an empty area outside the board emits `{ type: "clear", origin: "pointer" }`.
+- Selecting a destination square for the active source emits `{ type: "move", from, to, origin: "selection" }`.
+- Pressing a piece, dragging across squares, and releasing on a destination emits `{ type: "move", from, to, origin: "drag" }`.
+- Drops on the source, outside the board, on a square not in `destinations`, after cancellation, or with a non-primary pointer emit no event and restore the controlled position.
+- Passing `interaction: null` to `set` disables interaction on update and clears transient pointer state.
+
+The caller controls whether a move is applied. The renderer never optimistically mutates the position.
+
+## Presentation marks
+
+Presentation state is controlled and display-only:
+
+```ts
+board.set({
+  presentation: {
+    selected: "e1",
+    lastMove: { from: "e2", to: "e4" },
+    checked: "e8",
+  },
+});
+```
+
+- `selected` is the highlighted source square.
+- `lastMove` marks its `from` and `to` squares so the caller can show the most recent move without rendering extra pieces.
+- `checked` marks the square of the king currently in check.
+- `destinations` (inside `interaction`) marks the legal targets for each selectable source; occupied and empty destinations are distinguished in the rendered state so CSS can style captures differently from quiet moves.
+
+The renderer validates every supplied square. Presentation values never imply legality or game status.
+
+## Annotations, layers, and metadata
+
+Annotations are a keyed collection of arrows and circles:
+
+```ts
+board.set({
+  annotations: [
+    { id: "best", kind: "arrow", from: "d5", to: "e7", layer: "engine", color: "#15781B" },
+    { id: "weak", kind: "circle", square: "f6", layer: "user", color: "#dc322f" },
+  ],
+  visibleLayers: new Set(["user", "engine"]),
+});
+```
+
+- Every annotation carries a unique stable `id`, a `kind`, geometry in domain squares, a caller-defined `layer`, an optional `color`, and optional recursively JSON-compatible `metadata`.
+- Annotation metadata is opaque to the renderer. Names like `engine`, `assistant`, `opening`, `training`, and `debug` carry no renderer semantics.
+- `visibleLayers` controls which layers are drawn. Hidden layers remain in caller state but are absent from the rendered layer.
+- Omitting `visibleLayers` shows every layer; an empty set hides every annotation. Core updates accept `null` to reset visibility to every layer.
+- The renderer reconciles annotations by `id`. Adding, changing, hiding, or removing one annotation preserves unaffected nodes; orientation changes recompute geometry without recreating annotation nodes.
+
+## Semantic attributes
+
+Every observable state has a stable, read-only `data-*` attribute for tests, browser automation, and constrained adapters. They are observability hooks, not a mutation interface.
+
+- Pieces: `data-square`, `data-color`, `data-role` on each `.pw-piece` node.
+- Marks: `data-mark` and `data-square`; mark values are `selected`, `destination`, `last-move-from`, `last-move-to`, or `check`.
+- Destinations: `data-destination` on destination marks, with values `empty` or `occupied`.
+- Annotations: `data-annotation-id`, `data-annotation-kind`, and `data-annotation-layer` on annotation shapes.
+
+## Theming variables
+
+The renderer exposes CSS custom properties on `.pw-board`:
+
+| Variable | Purpose |
+| --- | --- |
+| `--pw-light-square` | Light square color |
+| `--pw-dark-square` | Dark square color |
+| `--pw-animation-duration` | Transition duration for piece movement |
+| `--pw-selected-color` | Selected square color |
+| `--pw-destination-color` | Empty destination color |
+| `--pw-capture-color` | Occupied destination color |
+| `--pw-last-move-color` | Last move source and destination color |
+| `--pw-check-color` | Checked king color |
+| `--pw-annotation-color` | Default arrow and circle color |
+
+Animation duration is non-negative; `0` switches to instant updates. Direct drag positioning is unanimated by design.
+
+## Lifecycle
+
+- `createChessboard(host, config)` returns a controller. The renderer validates inputs at the boundary and throws `TypeError` for invalid squares, pieces, colors, orientations, animation durations, interaction inputs, presentation inputs, annotations, layer visibility, and any other public value.
+- `set(update)` forwards controlled changes: position replacement, approved single-piece `move`, orientation flip, `ariaLabel`, `animationMs`, `interaction`, `presentation`, `annotations`, `visibleLayers`. Omitted fields are left unchanged. `interaction: null` disables interaction and clears transient pointer state.
+- `move(from, to)` is the caller-approved single-piece move. It preserves the moving DOM node, removes only the captured node, and does not animate if `animationMs` is `0`.
+- `destroy()` is idempotent and safe to call repeatedly. Calls to `set` or `move` after `destroy` throw `Error`. The DOM subtree is removed on destroy.
+
+Caller collections are copied at the seam. External mutation of `Position`, `destinations`, `annotations`, or `visibleLayers` after `set` cannot silently alter rendered state.
+
+## Accessibility
+
+The renderer exposes the board as one labelled image. `ariaLabel` in the core package and `boardLabel` in React customize that label; default piece glyphs and annotation shapes are decorative and hidden from assistive technology. The package does not implement keyboard interaction, roving square focus, screen-reader move entry, or move announcements, and therefore does not claim a fully accessible interactive-board experience. Callers that need an accessible interactive board must build that layer above the renderer.
+
+## React adapter
+
+`@plywise/chessboard-react` exposes the core contract as props:
+
+- `position`, `orientation`, `boardLabel`, `animationMs` (baseline).
+- `interaction` (`{ destinations, onEvent } | null`).
+- `presentation` (`{ selected?, lastMove?, checked? }`).
+- `annotations` (`Annotation[]`).
+- `visibleLayers` (`ReadonlySet<string> | undefined`; omitted shows all, empty hides all).
+
+The adapter creates exactly one core renderer instance, forwards every prop change through that instance, keeps the latest `onEvent` available without recreating the board, and destroys the instance on unmount. No React state is used for board DOM, drag coordinates, or transient pointer state; pointer movement never triggers a React render.
+
+Re-exported domain types include `Color`, `File`, `Rank`, `Role`, `Square`, `Piece`, `Position`, `Annotation`, `ArrowAnnotation`, `CircleAnnotation`, `JsonValue`, `Destinations`, `Interaction`, `InteractionEvent`, `Presentation`, `LastMove`, `ChessboardConfig`, and `ChessboardUpdate`.
 
 ## Support contract
 
@@ -54,13 +208,9 @@ export function Board({ position }) {
 - Node.js 22 and npm 11.17 are required for repository development and publishing, not for browser runtime.
 - Styles are opt-in through `@plywise/chessboard/style.css`.
 
-## Accessibility
+## Out of scope
 
-The renderer exposes the board as one labelled image. `ariaLabel` in the core package and `boardLabel` in React customize that label; individual decorative piece glyphs are hidden from assistive technology. Keyboard interaction is not implemented yet, so the package does not claim an accessible interactive-board experience.
-
-## Scope
-
-The initial renderer covers position rendering, orientation, incremental approved moves, dynamic updates, cleanup, and the React lifecycle. Interaction, highlights, shapes, and animation interruption remain out of scope.
+The renderer does not implement chess rules, FEN/PGN parsing, legal-move calculation, turns, premoves, ghost pieces, free drawing, board editing, keyboard interaction, screen-reader move entry, full keyboard navigation, a public agent namespace, a public schema package, a custom piece element factory, raw SVG access, or 3D/canvas rendering. The internal `BoardSnapshot` and `BoardCommand` types are private and not exported.
 
 ## Development
 
@@ -71,6 +221,10 @@ npm run verify
 npm run dev
 ```
 
-`npm run verify` runs Biome, TypeScript, unit tests, `publint`, Are the Types Wrong, a packed-tarball consumer build, and the Chromium smoke test. Run `npm run format` to apply Biome fixes.
+`npm run verify` runs Biome, TypeScript, unit tests, `publint`, Are the Types Wrong, the packed-tarball consumer build, and Chromium smoke tests. Run `npm run format` to apply Biome fixes.
+
+## Benchmarks
+
+`npm run bench` runs a reproducible Chromium benchmark against an approved-move, 1,000-position-update, arbitrary-replacement, annotation-replacement, 32/50-board, and 60/120 Hz drag-coalescing workload. It uses the existing Vite and Playwright toolchain (no benchmark framework or new runtime dependency), reports deterministic median/p95/p99 JS duration plus board-owned created/removed node counts, and writes `benchmarks/report.json` together with the same JSON on stdout. Timing is advisory; correctness failures still fail the command. Override `PW_BENCH_SAMPLES`, `PW_BENCH_WARMUP`, `PW_BENCH_ITERATIONS`, `PW_BENCH_DRAG_FRAMES_60`, `PW_BENCH_DRAG_FRAMES_120`, or `PW_BENCH_PORT` to retune.
 
 After the initial release, user-visible package changes require `npm run changeset`. The manually triggered release workflow opens versioning pull requests and publishes through npm trusted publishing; the npm organization must authorize `.github/workflows/release.yml` before it is run.

@@ -25,7 +25,8 @@
     "typecheck": "tsc --noEmit",
     "validate:packages": "npm run build && publint packages/chessboard && publint packages/chessboard-react && attw --pack --profile esm-only packages/chessboard && attw --pack --profile esm-only packages/chessboard-react",
     "verify": "npm run check && npm test && npm run validate:packages && npm run smoke:package && npm run test:e2e",
-    "version-packages": "changeset version"
+    "version-packages": "changeset version",
+    "bench": "node scripts/bench.mjs"
   },
   "engines": {
     "node": ">=22"

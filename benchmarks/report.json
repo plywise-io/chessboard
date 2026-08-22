@@ -1,0 +1,182 @@
+{
+  "generatedAt": "2026-08-22T20:31:45.728Z",
+  "environment": {
+    "platform": "linux 7.1.4-200.fc44.x86_64 x64",
+    "cpu": "AMD Ryzen 9 5950X 16-Core Processor",
+    "cpuCount": 32,
+    "playwright": "1.62.1",
+    "vite": "8.2.2",
+    "chessboard": "0.1.0",
+    "reactAdapter": "0.1.0",
+    "browser": "chromium 151.0.7922.34",
+    "samples": 30,
+    "warmup": 3
+  },
+  "scenarios": [
+    {
+      "name": "ordinaryApprovedMove",
+      "duration": {
+        "median": 0,
+        "p95": 0.10000000149011612,
+        "p99": 0.10000000149011612,
+        "min": 0,
+        "max": 0.10000000149011612,
+        "count": 30
+      },
+      "nodes": {
+        "created": 0,
+        "removed": 0,
+        "attributeRecords": 240
+      }
+    },
+    {
+      "name": "bulkNavigation",
+      "iterations": 1000,
+      "duration": {
+        "median": 2.3000000044703484,
+        "p95": 3.7999999970197678,
+        "p99": 4.9000000059604645,
+        "min": 2,
+        "max": 4.9000000059604645,
+        "count": 40
+      },
+      "perSampleIterations": 25,
+      "nodes": {
+        "created": 1000,
+        "removed": 1001,
+        "attributeRecords": 90003
+      }
+    },
+    {
+      "name": "arbitraryReplacement",
+      "duration": {
+        "median": 0.19999999552965164,
+        "p95": 0.20000000298023224,
+        "p99": 0.30000000447034836,
+        "min": 0.09999999403953552,
+        "max": 0.30000000447034836,
+        "count": 30
+      },
+      "nodes": {
+        "created": 29,
+        "removed": 29,
+        "attributeRecords": 4501
+      }
+    },
+    {
+      "name": "annotationReplacement",
+      "duration": {
+        "median": 0,
+        "p95": 0.10000000149011612,
+        "p99": 0.10000000149011612,
+        "min": 0,
+        "max": 0.10000000149011612,
+        "count": 30
+      },
+      "nodes": {
+        "created": 90,
+        "removed": 90,
+        "attributeRecords": 0
+      }
+    },
+    {
+      "name": "multiBoard-32",
+      "boardCount": 32,
+      "iterations": 50,
+      "duration": {
+        "median": 3.399999998509884,
+        "p95": 4.100000001490116,
+        "p99": 5.4000000059604645,
+        "min": 3.100000001490116,
+        "max": 5.4000000059604645,
+        "count": 20
+      },
+      "nodes": {
+        "created": 608,
+        "removed": 608,
+        "attributeRecords": 57696
+      },
+      "correctness": {
+        "boardCount": 32
+      }
+    },
+    {
+      "name": "multiBoard-50",
+      "boardCount": 50,
+      "iterations": 50,
+      "duration": {
+        "median": 6,
+        "p95": 9.100000001490116,
+        "p99": 12.399999998509884,
+        "min": 4.699999995529652,
+        "max": 12.399999998509884,
+        "count": 20
+      },
+      "nodes": {
+        "created": 950,
+        "removed": 950,
+        "attributeRecords": 90150
+      },
+      "correctness": {
+        "boardCount": 50
+      }
+    },
+    {
+      "name": "dragCoalescing",
+      "rateHz": 60,
+      "framesRequested": 240,
+      "pointerEvents": 241,
+      "coalescedFrames": 244,
+      "duration": {
+        "median": 16.69999999552965,
+        "p95": 16.80000000447035,
+        "p99": 17.299999997019768,
+        "min": 3.2999999970197678,
+        "max": 18.200000002980232,
+        "count": 243
+      },
+      "perEvent": {
+        "median": 16.69999999552965,
+        "p95": 16.80000000447035,
+        "p99": 17,
+        "min": 15.699999995529652,
+        "max": 17.5,
+        "count": 240
+      },
+      "nodes": {
+        "created": 0,
+        "removed": 0,
+        "attributeRecords": 245
+      }
+    },
+    {
+      "name": "dragCoalescing",
+      "rateHz": 120,
+      "framesRequested": 240,
+      "pointerEvents": 241,
+      "coalescedFrames": 241,
+      "duration": {
+        "median": 16.69999999552965,
+        "p95": 16.80000000447035,
+        "p99": 17.100000001490116,
+        "min": 16.100000001490116,
+        "max": 17.19999999552965,
+        "count": 240
+      },
+      "perEvent": {
+        "median": 16.69999999552965,
+        "p95": 16.80000000447035,
+        "p99": 17,
+        "min": 16.19999999552965,
+        "max": 17.100000001490116,
+        "count": 240
+      },
+      "nodes": {
+        "created": 0,
+        "removed": 0,
+        "attributeRecords": 245
+      }
+    }
+  ],
+  "consoleErrors": []
+}

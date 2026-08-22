@@ -2,6 +2,9 @@
   --pw-light-square: #f0d9b5;
   --pw-dark-square: #b58863;
   --pw-animation-duration: 150ms;
+  --pw-selected-color: rgba(20, 85, 180, 0.55);
+  --pw-destination-color: rgba(20, 85, 180, 0.45);
+  --pw-capture-color: rgba(20, 85, 180, 0.6);
   position: relative;
   box-sizing: border-box;
   width: 100%;
@@ -40,9 +43,94 @@
   );
   transition: transform var(--pw-animation-duration) ease;
   will-change: transform;
+  pointer-events: auto;
 }
 
 .pw-piece[data-color="black"] {
   color: #111;
   text-shadow: 0 1px 1px rgb(255 255 255 / 70%);
+}
+
+.pw-mark {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 12.5%;
+  height: 12.5%;
+  pointer-events: none;
+  transform: translate3d(
+    calc(var(--pw-file) * 100%),
+    calc(var(--pw-rank) * 100%),
+    0
+  );
+}
+
+.pw-mark-selected {
+  background: var(--pw-selected-color);
+}
+
+.pw-mark-destination[data-destination="empty"] {
+  background: radial-gradient(
+    circle,
+    var(--pw-destination-color) 0 30%,
+    transparent 30%
+  );
+}
+
+.pw-mark-destination[data-destination="occupied"] {
+  background: radial-gradient(
+    circle,
+    transparent 0 60%,
+    var(--pw-capture-color) 60% 65%,
+    transparent 65%
+  );
+}
+.pw-board {
+  --pw-last-move-color: rgba(155, 199, 0, 0.41);
+  --pw-check-color: rgba(230, 0, 0, 0.65);
+}
+
+.pw-mark-last-move-from,
+.pw-mark-last-move-to {
+  background: var(--pw-last-move-color);
+}
+
+.pw-mark-check {
+  background: radial-gradient(
+    circle,
+    transparent 0 70%,
+    var(--pw-check-color) 70% 90%,
+    transparent 90%
+  );
+}
+.pw-annotations {
+  --pw-annotation-color: rgba(20, 85, 180, 0.9);
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.pw-annotations path {
+  stroke: var(--pw-annotation-color);
+  stroke-width: 0.18;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.pw-annotations circle {
+  stroke: var(--pw-annotation-color);
+  stroke-width: 0.12;
+  fill: none;
+}
+
+/* Drag visual: lifted piece sits above siblings and ignores pointer
+ * events while the board holds pointer capture. Transition is disabled
+ * inline by the renderer so the piece tracks the pointer exactly. */
+.pw-piece.pw-piece-dragging,
+.pw-piece[data-dragging="true"] {
+  z-index: 2;
+  cursor: grabbing;
+  filter: drop-shadow(0 4px 6px rgb(0 0 0 / 0.35));
+  pointer-events: none;
 }

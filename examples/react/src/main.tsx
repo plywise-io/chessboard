@@ -1,12 +1,20 @@
-import type { Piece, Role, Square } from "@plywise/chessboard";
+import type {
+  Annotation,
+  Interaction,
+  InteractionEvent,
+  Piece,
+  Position,
+  Presentation,
+  Square,
+} from "@plywise/chessboard";
 import "@plywise/chessboard/style.css";
 import { Chessboard } from "@plywise/chessboard-react";
-import { StrictMode } from "react";
+import { StrictMode, useCallback, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
-const files = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
-const backRank: readonly Role[] = [
+const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
+const BACK_RANK = [
   "rook",
   "knight",
   "bishop",
@@ -15,16 +23,259 @@ const backRank: readonly Role[] = [
   "bishop",
   "knight",
   "rook",
-];
-const position = new Map<Square, Piece>();
+] as const;
 
-for (const [index, file] of files.entries()) {
-  const role = backRank[index];
-  if (!role) continue;
-  position.set(`${file}1`, { color: "white", role });
-  position.set(`${file}2`, { color: "white", role: "pawn" });
-  position.set(`${file}7`, { color: "black", role: "pawn" });
-  position.set(`${file}8`, { color: "black", role });
+function initialPosition(): Position {
+  const position = new Map<Square, Piece>();
+  FILES.forEach((file, index) => {
+    const role = BACK_RANK[index];
+    if (!role) return;
+    position.set(`${file}1`, { color: "white", role });
+    position.set(`${file}2`, { color: "white", role: "pawn" });
+    position.set(`${file}7`, { color: "black", role: "pawn" });
+    position.set(`${file}8`, { color: "black", role });
+  });
+  return position;
+}
+
+function legalDestinations(
+  position: Position,
+  source: Square,
+): readonly Square[] {
+  const piece = position.get(source);
+  if (!piece) return [];
+  const file = source[0];
+  const rank = Number(source[1]);
+  const out: Square[] = [];
+  if (piece.role === "pawn") {
+    const dir = piece.color === "white" ? 1 : -1;
+    const startRank = piece.color === "white" ? 2 : 7;
+    const one = `${file}${rank + dir}` as Square;
+    if (!position.has(one)) {
+      out.push(one);
+      if (rank === startRank) {
+        const two = `${file}${rank + 2 * dir}` as Square;
+        if (!position.has(two)) out.push(two);
+      }
+    }
+  } else if (piece.role === "rook") {
+    for (const dx of [-1, 1] as const) {
+      for (
+        let f = FILES.indexOf(file as (typeof FILES)[number]) + dx;
+        f >= 0 && f < 8;
+        f += dx
+      ) {
+        const sq = `${FILES[f]}${rank}` as Square;
+        out.push(sq);
+        if (position.has(sq)) break;
+      }
+    }
+    for (const dy of [-1, 1] as const) {
+      for (let r = rank + dy; r >= 1 && r <= 8; r += dy) {
+        const sq = `${file}${r}` as Square;
+        out.push(sq);
+        if (position.has(sq)) break;
+      }
+    }
+  }
+  return out;
+}
+
+function lastEventLabel(event: InteractionEvent): string {
+  if (event.type === "select") return `select ${event.square}`;
+  if (event.type === "clear") return "clear";
+  return `move ${event.from}→${event.to} (${event.origin})`;
+}
+
+const ANNOTATIONS: readonly Annotation[] = [
+  {
+    id: "user-arrow",
+    kind: "arrow",
+    from: "e2",
+    to: "e4",
+    layer: "user",
+    color: "#15781B",
+    metadata: { line: "main", eval_cp: 32 },
+  },
+  {
+    id: "engine-circle",
+    kind: "circle",
+    square: "d5",
+    layer: "engine",
+    color: "#268bd2",
+    metadata: { multipv: 1, depth: 24 },
+  },
+  {
+    id: "training-arrow",
+    kind: "arrow",
+    from: "d2",
+    to: "d4",
+    layer: "training",
+    color: "#d33682",
+    metadata: { lesson: 3, source: "lichess-puzzles" },
+  },
+];
+
+function App() {
+  const [position, setPosition] = useState(initialPosition);
+  const [orientation, setOrientation] = useState<"white" | "black">("white");
+  const [selected, setSelected] = useState<Square | undefined>(undefined);
+  const [lastEvent, setLastEvent] = useState("no gesture yet");
+  const [showAnnotations, setShowAnnotations] = useState(true);
+  const [showStateMarks, setShowStateMarks] = useState(false);
+  const [lastMove, setLastMove] = useState<Presentation["lastMove"]>();
+  const [hiddenLayers, setHiddenLayers] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+
+  const stateRef = useRef({ position });
+  stateRef.current.position = position;
+
+  const destinations = useMemo(() => {
+    const map = new Map<Square, readonly Square[]>();
+    for (const square of position.keys()) {
+      const moves = legalDestinations(position, square);
+      if (moves.length > 0) map.set(square, moves);
+    }
+    return map;
+  }, [position]);
+
+  const onEvent = useCallback((event: InteractionEvent) => {
+    setLastEvent(lastEventLabel(event));
+    if (event.type === "select") {
+      const moves = legalDestinations(stateRef.current.position, event.square);
+      if (moves.length === 0) {
+        setSelected(undefined);
+        return;
+      }
+      setSelected(event.square);
+      return;
+    }
+    if (event.type === "clear") {
+      setSelected(undefined);
+      return;
+    }
+    if (event.type === "move") {
+      if (event.from === event.to) return;
+      const piece = stateRef.current.position.get(event.from);
+      if (!piece) return;
+      const allowed = legalDestinations(stateRef.current.position, event.from);
+      if (!allowed.includes(event.to)) return;
+      const next = new Map(stateRef.current.position);
+      setLastMove({ from: event.from, to: event.to });
+      next.delete(event.from);
+      next.set(event.to, piece);
+      setPosition(next);
+      setSelected(undefined);
+    }
+  }, []);
+
+  const interaction = useMemo<Interaction>(
+    () => ({ destinations, onEvent }),
+    [destinations, onEvent],
+  );
+  const presentation = useMemo<Presentation>(
+    () => ({
+      ...(selected === undefined ? {} : { selected }),
+      ...(lastMove === undefined
+        ? showStateMarks
+          ? { lastMove: { from: "e2", to: "e4" } }
+          : {}
+        : { lastMove }),
+      ...(showStateMarks ? { checked: "e1" } : {}),
+    }),
+    [lastMove, selected, showStateMarks],
+  );
+  // `undefined` keeps every layer visible; an explicit `Set` filters them.
+  const visibleLayers = useMemo(() => {
+    if (hiddenLayers.size === 0) return undefined;
+    const all = ["user", "engine", "training"];
+    return new Set(all.filter((layer) => !hiddenLayers.has(layer)));
+  }, [hiddenLayers]);
+
+  const toggleLayer = useCallback((layer: string) => {
+    setHiddenLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(layer)) next.delete(layer);
+      else next.add(layer);
+      return next;
+    });
+  }, []);
+
+  return (
+    <main>
+      <h1>Plywise Chessboard</h1>
+      <Chessboard
+        position={position}
+        orientation={orientation}
+        boardLabel="Demo chess position"
+        animationMs={150}
+        interaction={interaction}
+        presentation={presentation}
+        annotations={showAnnotations ? ANNOTATIONS : []}
+        {...(visibleLayers === undefined ? {} : { visibleLayers })}
+      />
+      <div className="controls">
+        <button
+          type="button"
+          onClick={() =>
+            setOrientation((current) =>
+              current === "white" ? "black" : "white",
+            )
+          }
+        >
+          Flip orientation
+        </button>
+        <button
+          type="button"
+          aria-pressed={showAnnotations}
+          data-testid="toggle-annotations"
+          onClick={() => setShowAnnotations((prev) => !prev)}
+        >
+          {showAnnotations ? "Hide" : "Show"} annotations
+        </button>
+        <button
+          type="button"
+          aria-pressed={!hiddenLayers.has("user")}
+          data-testid="toggle-user-layer"
+          onClick={() => toggleLayer("user")}
+        >
+          {hiddenLayers.has("user") ? "Show" : "Hide"} user
+        </button>
+        <button
+          type="button"
+          aria-pressed={!hiddenLayers.has("training")}
+          data-testid="toggle-training-layer"
+          onClick={() => toggleLayer("training")}
+        >
+          {hiddenLayers.has("training") ? "Show" : "Hide"} training
+        </button>
+        <button
+          type="button"
+          aria-pressed={showStateMarks}
+          onClick={() => setShowStateMarks((shown) => !shown)}
+        >
+          {showStateMarks ? "Hide" : "Show"} last move and check
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setPosition(initialPosition());
+            setSelected(undefined);
+            setLastMove(undefined);
+          }}
+        >
+          Reset position
+        </button>
+      </div>
+      <p className="status" data-testid="last-event">
+        Last event: {lastEvent}
+      </p>
+      <p className="status" data-testid="orientation">
+        Orientation: {orientation}
+      </p>
+    </main>
+  );
 }
 
 const root = document.getElementById("root");
@@ -32,9 +283,6 @@ if (!root) throw new Error("Missing #root element");
 
 createRoot(root).render(
   <StrictMode>
-    <main>
-      <h1>Plywise Chessboard</h1>
-      <Chessboard position={position} boardLabel="Initial chess position" />
-    </main>
+    <App />
   </StrictMode>,
 );

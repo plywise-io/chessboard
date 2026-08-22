@@ -21,7 +21,12 @@
     "./dist/style.css"
   ],
   "files": [
-    "dist"
+    "dist/index.d.ts",
+    "dist/index.js",
+    "dist/internal/values.d.ts",
+    "dist/internal/values.js",
+    "dist/style.css",
+    "dist/style.d.ts"
   ],
   "exports": {
     ".": {

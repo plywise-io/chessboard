@@ -1,3 +1,9 @@
 node_modules/
 dist/
 *.tgz
+# Local agent configuration
+AGENTS.md
+skills-lock.json
+.agents/skills/
+.scratch/
+docs/agents/

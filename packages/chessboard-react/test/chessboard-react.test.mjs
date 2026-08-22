@@ -17,9 +17,7 @@ test("mounts, updates, and removes the imperative board", async () => {
     ]);
   const host = document.querySelector("#root");
   const root = createRoot(host);
-  const position = new Map([
-    ["a1", { color: "white", role: "rook" }],
-  ]);
+  const position = new Map([["a1", { color: "white", role: "rook" }]]);
 
   await act(() =>
     root.render(createElement(Chessboard, { position, orientation: "white" })),

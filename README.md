@@ -50,8 +50,11 @@ export function Board({ position }) {
 
 ```sh
 npm install
+npm run check
 npm test
 npm run dev
 ```
+
+Run `npm run format` to apply Biome formatting. Pull requests run the same checks in GitHub Actions and verify both npm tarballs.
 
 The initial renderer covers position rendering, orientation, incremental approved moves, dynamic updates, cleanup, and the React lifecycle. Interaction, highlights, shapes, and animation interruption remain outside this commit.

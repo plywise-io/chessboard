@@ -1,13 +1,22 @@
 {
   "name": "plywise-chessboard-workspace",
   "private": true,
+  "packageManager": "npm@11.17.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plywise-io/chessboard.git"
+  },
   "type": "module",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "build": "npm run build -w @plywise/chessboard && npm run build -w @plywise/chessboard-react",
+    "check": "biome check .",
     "dev": "vite examples/react",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run typecheck && npm run test -w @plywise/chessboard && npm run test -w @plywise/chessboard-react"
   },
@@ -15,6 +24,7 @@
     "node": ">=22"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.10",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "jsdom": "^30.0.1",

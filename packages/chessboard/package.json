@@ -2,6 +2,20 @@
   "name": "@plywise/chessboard",
   "version": "0.1.0",
   "description": "A small, framework-agnostic chessboard renderer.",
+  "keywords": [
+    "chess",
+    "chessboard",
+    "typescript"
+  ],
+  "homepage": "https://github.com/plywise-io/chessboard#readme",
+  "bugs": {
+    "url": "https://github.com/plywise-io/chessboard/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plywise-io/chessboard.git",
+    "directory": "packages/chessboard"
+  },
   "type": "module",
   "sideEffects": [
     "./src/style.css"
@@ -19,6 +33,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "test": "node --test test/*.test.mjs"
   },
   "license": "MIT",

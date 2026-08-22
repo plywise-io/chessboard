@@ -23,6 +23,8 @@
 
 ```sh
 npm install
+npm run check      # Biome formatting, linting, and import organization
+npm run format     # apply Biome formatting
 npm run build      # compile both packages
 npm run typecheck  # tsc --noEmit
 npm test           # build, typecheck, then both package test suites
@@ -38,11 +40,12 @@ For a focused suite: `npm run test -w @plywise/chessboard` or `npm run test -w @
 - Validate public renderer inputs at the boundary and throw `TypeError` for invalid values. Keep lifecycle misuse (`set`/`move` after `destroy`) as an `Error`.
 - Treat positions as immutable input: validate/copy into a new `Map`; update keyed DOM nodes in place so moves retain their element.
 - React uses `useRef` for the imperative instance and effects for create/update/destroy. Do not add React state for board DOM state.
-- No formatter or linter is configured. Match existing concise TypeScript and CSS formatting; do not add tooling without a separate requirement.
+- Biome owns formatting, linting, and import organization. Run `npm run check` before committing and `npm run format` to apply formatting.
 
 ## Important Files
 
 - `package.json` — npm workspace scripts and Node engine.
+- `biome.json` — formatter, linter, and import-organization rules.
 - `tsconfig.json` — shared strict compiler contract.
 - `packages/chessboard/src/index.ts` — public imperative API and validation.
 - `packages/chessboard/src/style.css` — renderer CSS/DOM contract.
@@ -55,4 +58,4 @@ Use Node.js 22 or later and npm; `package-lock.json` is authoritative. This is E
 
 ## Testing & QA
 
-Tests use Node's built-in `node:test` and `node:assert/strict`; DOM tests use JSDOM. Test files follow `packages/<package>/test/*.test.mjs` and import `../dist/index.js`, so build before invoking a package test directly. Cover observable DOM/lifecycle behavior and invalid inputs; no coverage threshold or CI workflow is configured.
+Tests use Node's built-in `node:test` and `node:assert/strict`; DOM tests use JSDOM. Test files follow `packages/<package>/test/*.test.mjs` and import `../dist/index.js`, so build before invoking a package test directly. Cover observable DOM/lifecycle behavior and invalid inputs; no coverage threshold is configured. GitHub Actions runs Biome, the full test command, and npm package dry-runs.

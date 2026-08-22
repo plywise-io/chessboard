@@ -27,7 +27,10 @@ for (const [index, file] of files.entries()) {
   position.set(`${file}8`, { color: "black", role });
 }
 
-createRoot(document.getElementById("root")!).render(
+const root = document.getElementById("root");
+if (!root) throw new Error("Missing #root element");
+
+createRoot(root).render(
   <StrictMode>
     <main>
       <h1>Plywise Chessboard</h1>

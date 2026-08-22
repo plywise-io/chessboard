@@ -2,6 +2,21 @@
   "name": "@plywise/chessboard-react",
   "version": "0.1.0",
   "description": "React adapter for @plywise/chessboard.",
+  "keywords": [
+    "chess",
+    "chessboard",
+    "react",
+    "typescript"
+  ],
+  "homepage": "https://github.com/plywise-io/chessboard#readme",
+  "bugs": {
+    "url": "https://github.com/plywise-io/chessboard/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plywise-io/chessboard.git",
+    "directory": "packages/chessboard-react"
+  },
   "type": "module",
   "files": [
     "dist"
@@ -14,6 +29,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build -w @plywise/chessboard && npm run build",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

@@ -9,7 +9,8 @@
   container-type: inline-size;
   overflow: hidden;
   touch-action: none;
-  background: conic-gradient(
+  background:
+    conic-gradient(
       from 90deg,
       var(--pw-dark-square) 25%,
       var(--pw-light-square) 0 50%,

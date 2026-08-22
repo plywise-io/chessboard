@@ -1,11 +1,11 @@
-import { createChessboard } from "@plywise/chessboard";
 import type {
   Chessboard as ChessboardInstance,
   Color,
   Position,
 } from "@plywise/chessboard";
-import { useEffect, useRef } from "react";
+import { createChessboard } from "@plywise/chessboard";
 import type { ComponentPropsWithoutRef } from "react";
+import { useEffect, useRef } from "react";
 
 export type { Color, Piece, Position, Role, Square } from "@plywise/chessboard";
 
@@ -16,6 +16,8 @@ export interface ChessboardProps
   readonly boardLabel?: string;
   readonly animationMs?: number;
 }
+
+const emptyPosition: Position = new Map();
 
 export function Chessboard({
   position,
@@ -31,10 +33,7 @@ export function Chessboard({
     if (!host.current) return;
 
     const board = createChessboard(host.current, {
-      position,
-      orientation,
-      ariaLabel: boardLabel,
-      animationMs,
+      position: emptyPosition,
     });
     instance.current = board;
 

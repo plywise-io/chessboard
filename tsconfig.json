@@ -18,5 +18,4 @@
     "examples/**/*.tsx",
     "types/**/*.d.ts"
   ]
-
 }

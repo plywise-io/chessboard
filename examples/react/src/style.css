@@ -1,0 +1,22 @@
+html {
+  color: #e7e7e7;
+  background: #171717;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  min-width: 20rem;
+  min-height: 100vh;
+  margin: 0;
+}
+
+main {
+  width: min(90vmin, 40rem);
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+h1 {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+}

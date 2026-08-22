@@ -1,0 +1,26 @@
+{
+  "name": "plywise-chessboard-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @plywise/chessboard && npm run build -w @plywise/chessboard-react",
+    "dev": "vite examples/react",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && npm run typecheck && npm run test -w @plywise/chessboard && npm run test -w @plywise/chessboard-react"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "jsdom": "^30.0.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}

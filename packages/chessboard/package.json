@@ -1,0 +1,28 @@
+{
+  "name": "@plywise/chessboard",
+  "version": "0.1.0",
+  "description": "A small, framework-agnostic chessboard renderer.",
+  "type": "module",
+  "sideEffects": [
+    "./src/style.css"
+  ],
+  "files": [
+    "dist",
+    "src/style.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./src/style.css"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.mjs"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

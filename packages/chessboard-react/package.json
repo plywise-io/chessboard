@@ -1,0 +1,29 @@
+{
+  "name": "@plywise/chessboard-react",
+  "version": "0.1.0",
+  "description": "React adapter for @plywise/chessboard.",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@plywise/chessboard": "^0.1.0"
+  },
+  "peerDependencies": {
+    "react": ">=18 <20"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

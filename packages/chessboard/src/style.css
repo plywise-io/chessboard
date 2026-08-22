@@ -1,0 +1,47 @@
+.pw-board {
+  --pw-light-square: #f0d9b5;
+  --pw-dark-square: #b58863;
+  --pw-animation-duration: 150ms;
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  aspect-ratio: 1;
+  container-type: inline-size;
+  overflow: hidden;
+  touch-action: none;
+  background: conic-gradient(
+      from 90deg,
+      var(--pw-dark-square) 25%,
+      var(--pw-light-square) 0 50%,
+      var(--pw-dark-square) 0 75%,
+      var(--pw-light-square) 0
+    )
+    0 0 / 25% 25%;
+  user-select: none;
+}
+
+.pw-piece {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: grid;
+  place-items: center;
+  width: 12.5%;
+  height: 12.5%;
+  color: #111;
+  font-family: "DejaVu Sans", "Noto Sans Symbols 2", sans-serif;
+  font-size: clamp(1.5rem, 9cqi, 5rem);
+  line-height: 1;
+  text-shadow: 0 1px 1px rgb(255 255 255 / 45%);
+  transform: translate3d(
+    calc(var(--pw-file) * 100%),
+    calc(var(--pw-rank) * 100%),
+    0
+  );
+  transition: transform var(--pw-animation-duration) ease;
+  will-change: transform;
+}
+
+.pw-piece[data-color="black"] {
+  color: #111;
+  text-shadow: 0 1px 1px rgb(255 255 255 / 70%);
+}

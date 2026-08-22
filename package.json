@@ -12,22 +12,33 @@
   ],
   "scripts": {
     "build": "npm run build -w @plywise/chessboard && npm run build -w @plywise/chessboard-react",
+    "changeset": "changeset",
     "check": "biome check .",
     "dev": "vite examples/react",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint .",
+    "release": "npm run verify && changeset publish",
+    "smoke:package": "node scripts/smoke-package.mjs",
+    "test": "npm run build && npm run typecheck && npm run test -w @plywise/chessboard && npm run test -w @plywise/chessboard-react",
+    "test:e2e": "npm run build && playwright test",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && npm run typecheck && npm run test -w @plywise/chessboard && npm run test -w @plywise/chessboard-react"
+    "validate:packages": "npm run build && publint packages/chessboard && publint packages/chessboard-react && attw --pack --profile esm-only packages/chessboard && attw --pack --profile esm-only packages/chessboard-react",
+    "verify": "npm run check && npm test && npm run validate:packages && npm run smoke:package && npm run test:e2e",
+    "version-packages": "changeset version"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@biomejs/biome": "2.5.10",
+    "@changesets/cli": "3.0.1",
+    "@playwright/test": "1.62.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "jsdom": "^30.0.1",
+    "publint": "0.3.24",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "typescript": "^7.0.2",

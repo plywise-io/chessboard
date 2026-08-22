@@ -20,4 +20,6 @@ board.move("e1", "e2");
 board.destroy();
 ```
 
+ESM-only. TypeScript declarations are included. The board is exposed to assistive technology as one labelled image; keyboard interaction is not implemented.
+
 See the [repository README](https://github.com/plywise-io/chessboard#readme) for architecture and development commands.

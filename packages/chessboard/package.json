@@ -18,21 +18,24 @@
   },
   "type": "module",
   "sideEffects": [
-    "./src/style.css"
+    "./dist/style.css"
   ],
   "files": [
-    "dist",
-    "src/style.css"
+    "dist"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./style.css": "./src/style.css"
+    "./style.css": {
+      "types": "./dist/style.d.ts",
+      "default": "./dist/style.css"
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-css.mjs",
     "prepack": "npm run build",
     "test": "node --test test/*.test.mjs"
   },

@@ -16,6 +16,8 @@
     "packages/**/*.tsx",
     "examples/**/*.ts",
     "examples/**/*.tsx",
+    "playwright.config.ts",
+    "tests/**/*.ts",
     "types/**/*.d.ts"
   ]
 }

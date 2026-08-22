@@ -14,14 +14,14 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - run: npm install --global npm@11.17.0
       - run: npm ci
-      - run: npm run check
-      - run: npm test
-      - run: npm pack --dry-run --workspaces
+      - run: npm exec -- playwright install --with-deps chromium
+      - run: npm run verify

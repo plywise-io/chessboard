@@ -16,3 +16,5 @@ export function Board({ position }) {
 ```
 
 The position remains controlled by the caller. Chess rules, move legality, and FEN/PGN parsing stay outside the renderer.
+
+Supports React 18 and 19 as peer dependencies. ESM-only; TypeScript declarations are included. Use `boardLabel` to provide the board’s accessible label.

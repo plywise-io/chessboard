@@ -46,15 +46,31 @@ export function Board({ position }) {
 }
 ```
 
+## Support contract
+
+- ESM-only packages with TypeScript declarations; CommonJS `require` is not supported.
+- `@plywise/chessboard-react` supports React 18 and 19 and does not install a second React copy.
+- Current stable Chrome, Edge, Firefox, and Safari are the browser target. Legacy browsers are not supported.
+- Node.js 22 and npm 11.17 are required for repository development and publishing, not for browser runtime.
+- Styles are opt-in through `@plywise/chessboard/style.css`.
+
+## Accessibility
+
+The renderer exposes the board as one labelled image. `ariaLabel` in the core package and `boardLabel` in React customize that label; individual decorative piece glyphs are hidden from assistive technology. Keyboard interaction is not implemented yet, so the package does not claim an accessible interactive-board experience.
+
+## Scope
+
+The initial renderer covers position rendering, orientation, incremental approved moves, dynamic updates, cleanup, and the React lifecycle. Interaction, highlights, shapes, and animation interruption remain out of scope.
+
 ## Development
 
 ```sh
-npm install
-npm run check
-npm test
+npm ci
+npm exec -- playwright install chromium
+npm run verify
 npm run dev
 ```
 
-Run `npm run format` to apply Biome formatting. Pull requests run the same checks in GitHub Actions and verify both npm tarballs.
+`npm run verify` runs Biome, TypeScript, unit tests, `publint`, Are the Types Wrong, a packed-tarball consumer build, and the Chromium smoke test. Run `npm run format` to apply Biome fixes.
 
-The initial renderer covers position rendering, orientation, incremental approved moves, dynamic updates, cleanup, and the React lifecycle. Interaction, highlights, shapes, and animation interruption remain outside this commit.
+After the initial release, user-visible package changes require `npm run changeset`. The manually triggered release workflow opens versioning pull requests and publishes through npm trusted publishing; the npm organization must authorize `.github/workflows/release.yml` before it is run.

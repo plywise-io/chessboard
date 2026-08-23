@@ -1,5 +1,11 @@
 # @plywise/chessboard
 
+## 0.3.1
+
+### Patch Changes
+
+- 78a6534: Fix drag selection and jank on WebKitGTK: add `-webkit-user-select: none` (WebKitGTK 2.52 implements only the prefixed property) and drop the decorative `filter: drop-shadow` from the dragging state, which forced software painting of pointer-following transforms.
+
 ## 0.3.0
 
 ### Minor Changes

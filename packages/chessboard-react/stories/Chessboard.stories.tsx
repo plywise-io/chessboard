@@ -34,11 +34,17 @@ export const Default = {
     orientation: "white",
     ariaLabel: "Starting position",
     pieceSetName: "chessnut",
-    themeName: "blue"
+    themeName: "blue",
   },
-  render: (args) => (
+  render: ({ pieceSetName, themeName, ...args }) => (
     <div style={{ width: "24rem" }}>
-      <Chessboard {...args} />
+      <Chessboard
+        {...args}
+        theme={boardThemes[themeName as keyof typeof boardThemes]}
+        {...(pieceSetName === "glyphs"
+          ? { pieceSet: null as null }
+          : { pieceSet: pieceSets[pieceSetName as PieceSetName] })}
+      />
     </div>
   ),
 };

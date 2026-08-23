@@ -27,9 +27,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install --global npm@11.17.0
-      - run: ls node_modules/react node_modules/@types node_modules/@plywise 2>&1 | head -8
-      - run: npm ls react @types/react --depth=0 2>&1 | head -5
+      - run: npm ci
       - run: npm run build -w @plywise/chessboard
       - run: npm run build -w @plywise/chessboard-react
       - run: npm run build-storybook

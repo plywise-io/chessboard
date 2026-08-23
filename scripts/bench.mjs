@@ -31,8 +31,7 @@ const VITE_URL = `http://127.0.0.1:${VITE_PORT}`;
 const SAMPLES = Number(process.env.PW_BENCH_SAMPLES ?? 30);
 const WARMUP = Number(process.env.PW_BENCH_WARMUP ?? 3);
 const ITERATIONS = Number(process.env.PW_BENCH_ITERATIONS ?? 1000);
-const DRAG_FRAMES_60 = Number(process.env.PW_BENCH_DRAG_FRAMES_60 ?? 240);
-const DRAG_FRAMES_120 = Number(process.env.PW_BENCH_DRAG_FRAMES_120 ?? 240);
+const DRAG_FRAMES = Number(process.env.PW_BENCH_DRAG_FRAMES ?? 240);
 const DRAG_BOARDS = [32, 50];
 
 const SCENARIOS = [
@@ -41,8 +40,8 @@ const SCENARIOS = [
   "arbitraryReplacement",
   "annotationReplacement",
   ...DRAG_BOARDS.map((count) => ({ name: "multiBoard", count })),
-  { name: "dragCoalescing", rateHz: 60, frames: DRAG_FRAMES_60 },
-  { name: "dragCoalescing", rateHz: 120, frames: DRAG_FRAMES_120 },
+  { name: "dragCoalescing", rateHz: 60, frames: DRAG_FRAMES },
+  { name: "dragCoalescing", rateHz: 120, frames: DRAG_FRAMES },
 ];
 
 const FILES_INDEX = new Map([

@@ -38,6 +38,7 @@
     "@biomejs/biome": "2.5.10",
     "@changesets/cli": "3.0.1",
     "@playwright/test": "1.62.1",
+    "@storybook/addon-docs": "^10.5.10",
     "@storybook/react-vite": "^10.5.10",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

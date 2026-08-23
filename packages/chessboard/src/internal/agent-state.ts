@@ -9,7 +9,15 @@ import type {
   Presentation,
   Square,
 } from "../index.js";
-import { cloneJsonValue, isRole, isSquare, type JsonValue } from "./values.js";
+import {
+  assertColor,
+  assertPiece,
+  assertSquare,
+  cloneJsonValue,
+  compareSquares,
+  describe,
+  type JsonValue,
+} from "./values.js";
 
 // BoardSnapshot is the JSON-compatible internal view of every meaningful
 // renderer datum. Public collections (Map, Set) and callbacks are flattened
@@ -60,64 +68,22 @@ export interface SnapshotState {
   readonly visibleLayers: ReadonlySet<string> | null;
 }
 
-function assertSquare(value: unknown, label: string): Square {
-  if (!isSquare(value)) {
-    throw new TypeError(
-      `${label} must be a square like "e4", got ${describe(value)}`,
-    );
-  }
-  return value;
-}
-
-function assertColor(value: unknown, label: string): Color {
-  if (value !== "white" && value !== "black") {
-    throw new TypeError(
-      `${label} must be "white" or "black", got ${describe(value)}`,
-    );
-  }
-  return value;
-}
-
-function assertPiece(value: unknown, label: string): Piece {
-  if (!value || typeof value !== "object") {
-    throw new TypeError(
-      `${label} must be a piece object, got ${describe(value)}`,
-    );
-  }
-  const candidate = value as { color?: unknown; role?: unknown };
-  if (!isRole(candidate.role)) {
-    throw new TypeError(
-      `${label}.role must be a valid role, got ${describe(candidate.role)}`,
-    );
-  }
-  return {
-    color: assertColor(candidate.color, `${label}.color`),
-    role: candidate.role,
-  };
-}
-
 function assertJsonMetadata(value: unknown, label: string): JsonValue {
   return cloneJsonValue(value, label);
 }
-
-function describe(value: unknown): string {
-  if (typeof value === "string") return JSON.stringify(value);
-  if (value === undefined) return "undefined";
-  if (typeof value === "function") return "function";
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function compareSquares(a: Square, b: Square): number {
-  if (a.charAt(0) === b.charAt(0)) return Number(a[1]) - Number(b[1]);
-  return a < b ? -1 : 1;
-}
-
 function compareIds(a: Annotation, b: Annotation): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+function assertKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+): void {
+  for (const key of Object.keys(value)) {
+    if (!allowed.includes(key)) {
+      throw new TypeError(`command contains unknown field ${key}`);
+    }
+  }
 }
 
 // Builder — convert validated renderer state into a deterministic snapshot.
@@ -174,21 +140,21 @@ export function snapshotFromParsed(value: unknown): BoardSnapshot {
   }
   const v = value as Record<string, unknown>;
 
-  const position = parsePositionArray(v["position"], "snapshot.position");
-  const orientation = assertColor(v["orientation"], "snapshot.orientation");
-  const selected = parseOptionalSquare(v["selected"], "snapshot.selected");
-  const lastMove = parseOptionalLastMove(v["lastMove"], "snapshot.lastMove");
-  const checked = parseOptionalSquare(v["checked"], "snapshot.checked");
+  const position = parsePositionArray(v.position, "snapshot.position");
+  const orientation = assertColor(v.orientation, "snapshot.orientation");
+  const selected = parseOptionalSquare(v.selected, "snapshot.selected");
+  const lastMove = parseOptionalLastMove(v.lastMove, "snapshot.lastMove");
+  const checked = parseOptionalSquare(v.checked, "snapshot.checked");
   const destinations = parseDestinationsArray(
-    v["destinations"],
+    v.destinations,
     "snapshot.destinations",
   );
   const annotations = parseAnnotationArray(
-    v["annotations"],
+    v.annotations,
     "snapshot.annotations",
   );
   const visibleLayers = parseLayerArray(
-    v["visibleLayers"],
+    v.visibleLayers,
     "snapshot.visibleLayers",
   );
 
@@ -311,8 +277,8 @@ function parseOptionalLastMove(value: unknown, label: string): LastMove | null {
   }
   const v = value as Record<string, unknown>;
   return {
-    from: assertSquare(v["from"], `${label}.from`),
-    to: assertSquare(v["to"], `${label}.to`),
+    from: assertSquare(v.from, `${label}.from`),
+    to: assertSquare(v.to, `${label}.to`),
   };
 }
 
@@ -321,106 +287,90 @@ function parseAnnotation(value: unknown, label: string): Annotation {
     throw new TypeError(`${label} must be an object`);
   }
   const v = value as Record<string, unknown>;
-  if (typeof v["id"] !== "string" || v["id"].length === 0) {
+  if (typeof v.id !== "string" || v.id.length === 0) {
     throw new TypeError(`${label}.id must be a non-empty string`);
   }
-  if (typeof v["layer"] !== "string" || v["layer"].length === 0) {
+  if (typeof v.layer !== "string" || v.layer.length === 0) {
     throw new TypeError(`${label}.layer must be a non-empty string`);
   }
-  if (v["color"] !== undefined && typeof v["color"] !== "string") {
+  if (v.color !== undefined && typeof v.color !== "string") {
     throw new TypeError(`${label}.color must be a string when present`);
   }
   const metadata =
-    v["metadata"] === undefined
+    v.metadata === undefined
       ? undefined
-      : assertJsonMetadata(v["metadata"], `${label}.metadata`);
+      : assertJsonMetadata(v.metadata, `${label}.metadata`);
 
   const base = {
-    id: v["id"],
-    layer: v["layer"],
-    ...(v["color"] !== undefined ? { color: v["color"] as string } : {}),
+    id: v.id,
+    layer: v.layer,
+    ...(v.color !== undefined ? { color: v.color as string } : {}),
     ...(metadata !== undefined ? { metadata } : {}),
   };
 
-  if (v["kind"] === "arrow") {
-    const from = assertSquare(v["from"], `${label}.from`);
-    const to = assertSquare(v["to"], `${label}.to`);
+  if (v.kind === "arrow") {
+    const from = assertSquare(v.from, `${label}.from`);
+    const to = assertSquare(v.to, `${label}.to`);
     const arrow: ArrowAnnotation = { ...base, kind: "arrow", from, to };
     return arrow;
   }
-  if (v["kind"] === "circle") {
-    const square = assertSquare(v["square"], `${label}.square`);
+  if (v.kind === "circle") {
+    const square = assertSquare(v.square, `${label}.square`);
     const circle: CircleAnnotation = { ...base, kind: "circle", square };
     return circle;
   }
   throw new TypeError(
-    `${label}.kind must be "arrow" or "circle", got ${describe(v["kind"])}`,
+    `${label}.kind must be "arrow" or "circle", got ${describe(v.kind)}`,
   );
 }
 
 // Commands — validated and JSON-compatible. Parsing rejects unknown
-function assertKeys(
-  value: Record<string, unknown>,
-  allowed: readonly string[],
-): void {
-  for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) {
-      throw new TypeError(`command contains unknown field ${key}`);
-    }
-  }
-}
 // fields, unknown kinds, and any value that isn't plain domain data.
 export function validateCommand(value: unknown): BoardCommand {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("command must be an object");
   }
   const v = value as Record<string, unknown>;
-  switch (v["kind"]) {
+  switch (v.kind) {
     case "replacePosition":
       assertKeys(v, ["kind", "position"]);
       return {
         kind: "replacePosition",
-        position: parsePositionArray(v["position"], "command.position"),
+        position: parsePositionArray(v.position, "command.position"),
       };
     case "move":
       assertKeys(v, ["kind", "from", "to"]);
       return {
         kind: "move",
-        from: assertSquare(v["from"], "command.from"),
-        to: assertSquare(v["to"], "command.to"),
+        from: assertSquare(v.from, "command.from"),
+        to: assertSquare(v.to, "command.to"),
       };
     case "setOrientation":
       assertKeys(v, ["kind", "orientation"]);
       return {
         kind: "setOrientation",
-        orientation: assertColor(v["orientation"], "command.orientation"),
+        orientation: assertColor(v.orientation, "command.orientation"),
       };
     case "setPresentation":
       assertKeys(v, ["kind", "presentation"]);
       return {
         kind: "setPresentation",
-        presentation: parsePresentation(
-          v["presentation"],
-          "command.presentation",
-        ),
+        presentation: parsePresentation(v.presentation, "command.presentation"),
       };
     case "replaceAnnotations":
       assertKeys(v, ["kind", "annotations"]);
       return {
         kind: "replaceAnnotations",
-        annotations: parseAnnotationArray(
-          v["annotations"],
-          "command.annotations",
-        ),
+        annotations: parseAnnotationArray(v.annotations, "command.annotations"),
       };
     case "setVisibleLayers":
       assertKeys(v, ["kind", "layers"]);
       return {
         kind: "setVisibleLayers",
-        layers: parseLayerArray(v["layers"], "command.layers"),
+        layers: parseLayerArray(v.layers, "command.layers"),
       };
     default:
-      throw new TypeError(`unknown command kind ${describe(v["kind"])}`);
+      throw new TypeError(`unknown command kind ${describe(v.kind)}`);
   }
 }
 
@@ -430,17 +380,14 @@ function parsePresentation(value: unknown, label: string): Presentation {
   }
   const v = value as Record<string, unknown>;
   const selected =
-    v["selected"] === undefined || v["selected"] === null
+    v.selected === undefined || v.selected === null
       ? undefined
-      : assertSquare(v["selected"], `${label}.selected`);
+      : assertSquare(v.selected, `${label}.selected`);
   const checked =
-    v["checked"] === undefined || v["checked"] === null
+    v.checked === undefined || v.checked === null
       ? undefined
-      : assertSquare(v["checked"], `${label}.checked`);
-  const lastMove = parseOptionalLastMoveField(
-    v["lastMove"],
-    `${label}.lastMove`,
-  );
+      : assertSquare(v.checked, `${label}.checked`);
+  const lastMove = parseOptionalLastMoveField(v.lastMove, `${label}.lastMove`);
   const builder: { -readonly [K in keyof Presentation]: Presentation[K] } = {};
   if (selected !== undefined) builder.selected = selected;
   if (lastMove !== undefined) builder.lastMove = lastMove;
@@ -458,8 +405,8 @@ function parseOptionalLastMoveField(
   }
   const v = value as Record<string, unknown>;
   return {
-    from: assertSquare(v["from"], `${label}.from`),
-    to: assertSquare(v["to"], `${label}.to`),
+    from: assertSquare(v.from, `${label}.from`),
+    to: assertSquare(v.to, `${label}.to`),
   };
 }
 

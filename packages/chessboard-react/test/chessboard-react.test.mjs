@@ -119,6 +119,19 @@ test("forwards interaction prop and emits structured events through the latest c
     },
   );
 
+  // Standard pointer-capture surface that stock JSDOM lacks; the renderer
+  // calls it on every gesture teardown.
+  const capturedPointers = new WeakMap();
+  dom.window.Element.prototype.setPointerCapture = function (pointerId) {
+    capturedPointers.set(this, pointerId);
+  };
+  dom.window.Element.prototype.hasPointerCapture = function (pointerId) {
+    return capturedPointers.get(this) === pointerId;
+  };
+  dom.window.Element.prototype.releasePointerCapture = function (pointerId) {
+    if (capturedPointers.get(this) === pointerId) capturedPointers.delete(this);
+  };
+
   const [{ act, createElement }, { createRoot }, { Chessboard }] =
     await Promise.all([
       import("react"),

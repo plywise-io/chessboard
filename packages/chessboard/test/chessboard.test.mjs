@@ -1217,6 +1217,7 @@ test("right-dragging between squares emits an arrow intent with a transient prev
   assert.ok(preview);
   assert.equal(preview.getAttribute("data-annotation-kind"), "circle");
   dispatchPointer(host, "pointermove", "e4", { button: 2 });
+  await flushRaf();
   // Circle → arrow swaps the SVG element; re-query for the new node.
   const arrowPreview = host.querySelector('[data-annotation-id="pw-preview"]');
   assert.equal(arrowPreview?.getAttribute("data-annotation-kind"), "arrow");
@@ -1294,5 +1295,76 @@ test("left-click selection still works after right-button gestures", () => {
   assert.deepEqual(events, [
     { type: "circle", square: "d5", origin: "pointer" },
     { type: "select", square: "e2", origin: "pointer" },
+  ]);
+});
+
+function setBoardRect(host, left, top, size) {
+  Object.defineProperty(
+    host.ownerDocument.defaultView.HTMLElement.prototype,
+    "getBoundingClientRect",
+    {
+      configurable: true,
+      value: () => ({
+        x: left,
+        y: top,
+        left,
+        top,
+        right: left + size,
+        bottom: top + size,
+        width: size,
+        height: size,
+      }),
+    },
+  );
+}
+
+test("drag drop resolves against a resized board mid-gesture", async () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        onEvent: (e) => events.push(e),
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "e2");
+  // The host doubles in size and shifts after the press; only live-rect
+  // math keeps the gesture correct.
+  setBoardRect(host, 100, 100, 1600);
+  dispatchPointer(host, "pointermove", "e4");
+  await flushRaf();
+  const piece = host.querySelector('[data-square="e2"]');
+  // The press grabbed e2's centre and the pointer now sits over e4's
+  // centre; the inline transform is absolute, so the piece top-left lands
+  // exactly on e4's top-left corner (4 cells from the board origin).
+  assert.equal(piece.style.transform, "translate3d(800px, 800px, 0)");
+  dispatchPointer(host, "pointerup", "e4");
+  assert.deepEqual(events.slice(-1), [
+    { type: "move", from: "e2", to: "e4", origin: "drag" },
+  ]);
+});
+
+test("draw gestures survive a host resize mid-gesture", async () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        onEvent: (e) => events.push(e),
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "e2", { button: 2 });
+  setBoardRect(host, 100, 100, 1600);
+  dispatchPointer(host, "pointermove", "e4", { button: 2 });
+  await flushRaf();
+  const preview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.equal(preview?.getAttribute("data-annotation-kind"), "arrow");
+  dispatchPointer(host, "pointerup", "e4", { button: 2 });
+  assert.deepEqual(events, [
+    { type: "arrow", from: "e2", to: "e4", origin: "pointer" },
   ]);
 });

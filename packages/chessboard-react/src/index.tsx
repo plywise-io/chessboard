@@ -159,14 +159,18 @@ export function Chessboard({
 
     // A single-piece position change routes through the renderer's `move`
     // so the moving piece keeps its DOM node and transform transition.
-    const approved =
+    // Promotions and castling change or move more than one piece and fall
+    // back to a full position replacement.
+    const singlePieceMove =
       prior.position === position
         ? undefined
         : detectMove(prior.position, position);
-    if (approved) instance.current?.move(approved.from, approved.to);
+    if (singlePieceMove) {
+      instance.current?.move(singlePieceMove.from, singlePieceMove.to);
+    }
 
     const update: ChessboardUpdate = {
-      ...(approved || prior.position === position ? {} : { position }),
+      ...(singlePieceMove || prior.position === position ? {} : { position }),
       ...(prior.orientation === orientation ? {} : { orientation }),
       ...(prior.boardLabel === boardLabel ? {} : { ariaLabel: boardLabel }),
       ...(prior.animationMs === animationMs ? {} : { animationMs }),

@@ -57,12 +57,14 @@ function legalDestinations(
   if (piece.role === "pawn") {
     const dir = piece.color === "white" ? 1 : -1;
     const startRank = piece.color === "white" ? 2 : 7;
-    const one = `${file}${rank + dir}` as Square;
-    if (!position.has(one)) {
-      out.push(one);
-      if (rank === startRank) {
-        const two = `${file}${rank + 2 * dir}` as Square;
-        if (!position.has(two)) out.push(two);
+    if (rank + dir >= 1 && rank + dir <= 8) {
+      const one = `${file}${rank + dir}` as Square;
+      if (!position.has(one)) {
+        out.push(one);
+        if (rank === startRank) {
+          const two = `${file}${rank + 2 * dir}` as Square;
+          if (!position.has(two)) out.push(two);
+        }
       }
     }
   } else if (piece.role === "rook") {

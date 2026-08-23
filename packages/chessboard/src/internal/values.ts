@@ -10,6 +10,68 @@ export const roles = [
 
 export type BoardFile = (typeof files)[number];
 export type BoardRole = (typeof roles)[number];
+export type BoardColor = "white" | "black";
+
+export function assertSquare(
+  value: unknown,
+  label: string,
+): `${BoardFile}${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}` {
+  if (!isSquare(value)) {
+    throw new TypeError(
+      `${label} must be a square like "e4", got ${describe(value)}`,
+    );
+  }
+  return value;
+}
+
+export function assertColor(value: unknown, label: string): BoardColor {
+  if (value !== "white" && value !== "black") {
+    throw new TypeError(
+      `${label} must be "white" or "black", got ${describe(value)}`,
+    );
+  }
+  return value;
+}
+
+export function assertPiece(
+  value: unknown,
+  label: string,
+): { readonly color: BoardColor; readonly role: BoardRole } {
+  if (!value || typeof value !== "object") {
+    throw new TypeError(
+      `${label} must be a piece object, got ${describe(value)}`,
+    );
+  }
+  const candidate = value as { color?: unknown; role?: unknown };
+  if (!isRole(candidate.role)) {
+    throw new TypeError(
+      `${label}.role must be a valid role, got ${describe(candidate.role)}`,
+    );
+  }
+  return {
+    color: assertColor(candidate.color, `${label}.color`),
+    role: candidate.role,
+  };
+}
+
+export function describe(value: unknown): string {
+  if (typeof value === "string") return JSON.stringify(value);
+  if (value === undefined) return "undefined";
+  if (typeof value === "function") return "function";
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+export function compareSquares(
+  a: `${BoardFile}${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}`,
+  b: `${BoardFile}${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}`,
+): number {
+  if (a.charAt(0) === b.charAt(0)) return Number(a[1]) - Number(b[1]);
+  return a < b ? -1 : 1;
+}
 export type JsonValue =
   | null
   | boolean

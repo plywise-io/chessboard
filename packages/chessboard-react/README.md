@@ -80,7 +80,7 @@ function Game() {
 }
 ```
 
-The adapter passes `onEvent` through directly to the core renderer. The core renderer always invokes the most recent callback without recreating the board. Right-button `circle`/`arrow` intents arrive through the same callback; the board suppresses the native context menu while `interaction` is enabled.
+The adapter passes `onEvent` through directly to the core renderer. The core renderer always invokes the most recent callback without recreating the board. Right-button `circle`/`arrow` intents arrive through the same callback; the board suppresses the native context menu while `interaction` is enabled. A `position` prop whose diff is exactly one piece move (identical color and role) is forwarded through the renderer's approved-move operation so the moving piece keeps its DOM node and transform transition; promotions, castling, and multi-piece diffs fall back to full position replacement.
 
 ## Accessibility and theming
 

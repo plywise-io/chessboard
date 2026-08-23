@@ -5,6 +5,8 @@
   --pw-selected-color: rgba(20, 85, 180, 0.55);
   --pw-destination-color: rgba(20, 85, 180, 0.45);
   --pw-capture-color: rgba(20, 85, 180, 0.6);
+  --pw-last-move-color: rgba(155, 199, 0, 0.41);
+  --pw-check-color: rgba(230, 0, 0, 0.65);
   position: relative;
   box-sizing: border-box;
   width: 100%;
@@ -41,13 +43,9 @@
     calc(var(--pw-rank) * 100%),
     0
   );
-  transition: transform var(--pw-animation-duration) ease;
-  will-change: transform;
-  pointer-events: auto;
 }
 
 .pw-piece[data-color="black"] {
-  color: #111;
   text-shadow: 0 1px 1px rgb(255 255 255 / 70%);
 }
 
@@ -83,10 +81,6 @@
     var(--pw-capture-color) 60% 65%,
     transparent 65%
   );
-}
-.pw-board {
-  --pw-last-move-color: rgba(155, 199, 0, 0.41);
-  --pw-check-color: rgba(230, 0, 0, 0.65);
 }
 
 .pw-mark-last-move-from,
@@ -139,4 +133,5 @@
   cursor: grabbing;
   filter: drop-shadow(0 4px 6px rgb(0 0 0 / 0.35));
   pointer-events: none;
+  will-change: transform;
 }

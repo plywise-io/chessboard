@@ -72,7 +72,7 @@ interface Interaction {
 - `{ type: "circle", square: Square, origin: "pointer" }`
 - `{ type: "arrow", from: Square, to: Square, origin: "pointer" }`
 
-A source absent from `destinations` is not selectable. An empty destination collection still identifies a selectable source.
+A source absent from `destinations` is not selectable. An empty destination collection still identifies a selectable source. A pointer press must travel a few pixels before it becomes a drag; jitter-sized movement inside a click never lifts the piece.
 
 While `interaction` is enabled, right-button gestures report annotation intents instead of moving pieces: pressing and releasing the right button on one square emits a `circle` intent, and right-dragging between two squares emits an `arrow` intent. A translucent snapped preview is shown during the gesture and the native context menu is suppressed. These are requests only — the caller decides whether to add, remove, or ignore the corresponding annotation in its own state. Spectator boards (`interaction: null` or omitted) keep the native context menu and emit nothing.
 

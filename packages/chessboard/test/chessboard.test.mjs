@@ -836,7 +836,7 @@ test("dropping on a non-allowed destination emits no move intention and restores
     },
   );
   dispatchPointer(host, "pointerdown", "e2");
-  dispatchPointer(host, "pointermove", "e2");
+  dispatchPointer(host, "pointermove", "e3");
   await flushRaf();
   dispatchPointer(host, "pointerup", "d4"); // not in destinations
   assert.deepEqual(events, [
@@ -881,7 +881,7 @@ test("dropping on the drag source emits no move intention", async () => {
     },
   );
   dispatchPointer(host, "pointerdown", "e2");
-  dispatchPointer(host, "pointermove", "e2");
+  dispatchPointer(host, "pointermove", "e3");
   await flushRaf();
   dispatchPointer(host, "pointerup", "e2");
   assert.equal(
@@ -945,7 +945,7 @@ test("drag visual coordinates respect black orientation", async () => {
   );
   board.set({ orientation: "black" });
   dispatchPointer(host, "pointerdown", "e2", { orientation: "black" });
-  dispatchPointer(host, "pointermove", "e2", { orientation: "black" });
+  dispatchPointer(host, "pointermove", "e3", { orientation: "black" });
   await flushRaf();
   dispatchPointer(host, "pointerup", "e4", { orientation: "black" });
   assert.deepEqual(events, [
@@ -1366,5 +1366,55 @@ test("draw gestures survive a host resize mid-gesture", async () => {
   dispatchPointer(host, "pointerup", "e4", { button: 2 });
   assert.deepEqual(events, [
     { type: "arrow", from: "e2", to: "e4", origin: "pointer" },
+  ]);
+});
+
+test("sub-threshold pointer movement keeps a click a click", async () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        onEvent: (e) => events.push(e),
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "e2");
+  const boardEl = host.querySelector(".pw-board");
+  const rect = boardEl.getBoundingClientRect();
+  const jitterTo = (dx, dy) =>
+    boardEl.dispatchEvent(
+      new host.ownerDocument.defaultView.PointerEvent("pointermove", {
+        bubbles: true,
+        button: 0,
+        clientX: rect.left + 4.5 * (rect.width / 8) + dx,
+        clientY: rect.top + 6.5 * (rect.height / 8) + dy,
+        pointerId: 1,
+        pointerType: "mouse",
+        isPrimary: true,
+      }),
+    );
+  // 1px of jitter stays a click: no drag visual, no capture.
+  jitterTo(1, 1);
+  await flushRaf();
+  const piece = host.querySelector('[data-square="e2"]');
+  assert.equal(piece.classList.contains("pw-piece-dragging"), false);
+  assert.equal(piece.style.transform, "");
+  assert.equal(boardEl.hasPointerCapture(1), false);
+  dispatchPointer(host, "pointerup", "e2");
+  assert.deepEqual(events, [
+    { type: "select", square: "e2", origin: "pointer" },
+  ]);
+
+  // Crossing the threshold on a fresh press promotes the drag.
+  dispatchPointer(host, "pointerdown", "e2");
+  jitterTo(5, 0);
+  await flushRaf();
+  assert.equal(piece.classList.contains("pw-piece-dragging"), true);
+  dispatchPointer(host, "pointerup", "e2");
+  assert.deepEqual(events, [
+    { type: "select", square: "e2", origin: "pointer" },
+    { type: "select", square: "e2", origin: "pointer" },
   ]);
 });

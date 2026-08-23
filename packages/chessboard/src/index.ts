@@ -94,6 +94,32 @@ export interface CircleAnnotation {
 
 export type Annotation = ArrowAnnotation | CircleAnnotation;
 
+/** Square colors. Omitted keys fall back to the stylesheet default (brown). */
+export interface BoardTheme {
+  readonly light?: string;
+  readonly dark?: string;
+}
+
+const PIECE_SET_CDN =
+  "https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/";
+
+/**
+ * Curated open-source piece sets, each a base URL of `{w|b}{P,N,B,R,Q,K}.svg`
+ * files served from the lichess asset repository via jsDelivr.
+ * Licenses: cburnett/merida GPL-2.0-or-later, rhosgfx CC0-1.0.
+ */
+export const pieceSets: Readonly<Record<string, string>> = {
+  cburnett: `${PIECE_SET_CDN}cburnett/`,
+  merida: `${PIECE_SET_CDN}merida/`,
+  rhosgfx: `${PIECE_SET_CDN}rhosgfx/`,
+};
+
+export const boardThemes: Readonly<Record<string, BoardTheme>> = {
+  brown: { light: "#f0d9b5", dark: "#b58863" },
+  blue: { light: "#dee3e6", dark: "#8ca2ad" },
+  green: { light: "#ffffdd", dark: "#86a666" },
+};
+
 export interface ChessboardConfig {
   readonly position: Position;
   readonly orientation?: Color;
@@ -101,6 +127,14 @@ export interface ChessboardConfig {
   readonly animationMs?: number;
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
+  /**
+   * Base URL of a piece-set directory containing `{w|b}{P,N,B,R,Q,K}.svg`
+   * files (see {@link pieceSets}). Pieces render as images; omit or pass
+   * `null` for the built-in Unicode glyphs.
+   */
+  readonly pieceSet?: string | null;
+  /** Square colors (see {@link boardThemes}); omit or pass `null` to reset. */
+  readonly theme?: BoardTheme | null;
   readonly annotations?: readonly Annotation[];
   /**
    * Caller-controlled set of layer names that should be visible. Omitted
@@ -118,6 +152,16 @@ export interface ChessboardUpdate {
   readonly animationMs?: number;
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
+  /**
+   * Same contract as on {@link ChessboardConfig}. Omitting the field leaves
+   * the current piece set unchanged; `null` restores Unicode glyphs.
+   */
+  readonly pieceSet?: string | null;
+  /**
+   * Same contract as on {@link ChessboardConfig}. Omitting the field leaves
+   * the current theme unchanged; `null` restores stylesheet defaults.
+   */
+  readonly theme?: BoardTheme | null;
   readonly annotations?: readonly Annotation[];
   /**
    * Same visibility contract as on {@link ChessboardConfig}. Omitting the
@@ -149,6 +193,21 @@ const symbols: Record<Color, Record<Role, string>> = {
     queen: "♛",
     king: "♚",
   },
+};
+
+// A press must travel this far (CSS px) before it becomes a drag, so
+// jitter-sized movement inside a click never lifts the piece.
+// ponytail: fixed distance; expose a config knob only if a consumer
+// measurably needs a different activation feel.
+const dragActivationPx = 3;
+
+const roleLetters: Record<Role, string> = {
+  pawn: "p",
+  knight: "n",
+  bishop: "b",
+  rook: "r",
+  queen: "q",
+  king: "k",
 };
 
 type MarkKind =
@@ -209,6 +268,8 @@ export function createChessboard(
   let visibleLayers: ReadonlySet<string> | undefined = validateVisibleLayers(
     config.visibleLayers,
   );
+  let pieceSet: string | undefined = validatePieceSet(config.pieceSet);
+  let theme: BoardTheme | undefined = validateTheme(config.theme);
   let destroyed = false;
   // A pointerdown starts a candidate; the first move fills in the visual
   // fields and commits it as a drag.
@@ -262,6 +323,33 @@ export function createChessboard(
     "--pw-animation-duration",
     `${validateAnimation(config.animationMs ?? 150)}ms`,
   );
+  function applyTheme(next: BoardTheme | undefined): void {
+    for (const key of ["light", "dark"] as const) {
+      const color = next?.[key];
+      if (color === undefined) {
+        board.style.removeProperty(`--pw-${key}-square`);
+      } else {
+        board.style.setProperty(`--pw-${key}-square`, color);
+      }
+    }
+  }
+
+  function repaintPieceImage(node: HTMLDivElement, piece: Piece): void {
+    if (pieceSet) {
+      const url = `${pieceSet}${piece.color[0]}${roleLetters[piece.role]}.svg`;
+      if (node.style.backgroundImage !== `url("${url}")`) {
+        node.style.backgroundImage = `url("${url}")`;
+      }
+      if (node.textContent !== "") node.textContent = "";
+    } else {
+      if (node.style.backgroundImage !== "") node.style.backgroundImage = "";
+      const symbol = symbols[piece.color][piece.role];
+      if (node.textContent !== symbol) node.textContent = symbol;
+    }
+  }
+
+  applyTheme(theme);
+
   board.append(annotationLayer);
   host.append(board);
 
@@ -273,8 +361,7 @@ export function createChessboard(
     node.dataset.square = square;
     node.dataset.color = piece.color;
     node.dataset.role = piece.role;
-    const symbol = symbols[piece.color][piece.role];
-    if (node.textContent !== symbol) node.textContent = symbol;
+    repaintPieceImage(node, piece);
     place(node, square, orientation);
   }
 
@@ -687,10 +774,19 @@ export function createChessboard(
     ) {
       return;
     }
-    // Promote the pointerdown candidate to a real drag on the first move.
-    // Click-to-select still runs because pointerdown already emitted; this
-    // path only governs the visual + drop handling for drags.
+    // Promote the pointerdown candidate to a real drag once the pointer
+    // travels past the activation threshold; jitter-sized movement keeps
+    // the gesture a click. Click-to-select still runs because pointerdown
+    // already emitted.
     if (!active.piece) {
+      if (
+        Math.hypot(
+          event.clientX - active.clientX,
+          event.clientY - active.clientY,
+        ) < dragActivationPx
+      ) {
+        return;
+      }
       if (!board.hasPointerCapture(event.pointerId)) {
         board.setPointerCapture(event.pointerId);
       }
@@ -801,6 +897,12 @@ export function createChessboard(
       const nextVisibleLayers = hasVisibleLayers
         ? validateVisibleLayers(update.visibleLayers)
         : undefined;
+      const nextPieceSet =
+        update.pieceSet === undefined
+          ? undefined
+          : validatePieceSet(update.pieceSet);
+      const nextTheme =
+        update.theme === undefined ? undefined : validateTheme(update.theme);
 
       if (nextOrientation !== undefined) {
         clearDragVisual();
@@ -817,6 +919,17 @@ export function createChessboard(
           "--pw-animation-duration",
           `${nextAnimation}ms`,
         );
+      }
+      if (nextTheme !== undefined) {
+        theme = nextTheme;
+        applyTheme(theme);
+      }
+      if (nextPieceSet !== undefined && nextPieceSet !== pieceSet) {
+        pieceSet = nextPieceSet;
+        for (const [square, piece] of position) {
+          const node = nodes.get(square);
+          if (node) repaintPieceImage(node, piece);
+        }
       }
       if (nextInteraction !== undefined) {
         if (nextInteraction === null) {
@@ -997,6 +1110,31 @@ function validateAnimation(value: number): number {
   return value;
 }
 
+function validatePieceSet(
+  value: string | null | undefined,
+): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== "string" || value.length === 0) {
+    throw new TypeError("pieceSet must be a non-empty URL string or null");
+  }
+  return value;
+}
+
+function validateTheme(
+  value: BoardTheme | null | undefined,
+): BoardTheme | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (!value || typeof value !== "object") {
+    throw new TypeError("theme must be an object or null");
+  }
+  for (const key of ["light", "dark"] as const) {
+    const color = value[key];
+    if (color !== undefined && typeof color !== "string") {
+      throw new TypeError(`theme.${key} must be a CSS color string`);
+    }
+  }
+  return value;
+}
 function validateInteraction(value: Interaction): Interaction {
   if (!value || typeof value !== "object") {
     throw new TypeError("interaction must be an object");

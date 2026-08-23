@@ -1,4 +1,3 @@
-import { defaultPieces } from "./internal/defaultPieces.js";
 import { vendoredPieceSets } from "./internal/pieceSets.gen.js";
 import {
   type BoardFile,
@@ -140,6 +139,7 @@ export interface PieceSources {
  * Full licenses and per-file provenance: packages/chessboard/assets/SETS.md.
  */
 export const pieceSets = {
+  cburnett: vendoredPieceSets.cburnett,
   rhosgfx: vendoredPieceSets.rhosgfx,
   kiwenSuwi: vendoredPieceSets.kiwenSuwi,
   chessnut: vendoredPieceSets.chessnut,
@@ -248,22 +248,6 @@ const pieceLetters: Record<Role, string> = {
   queen: "Q",
   king: "K",
 };
-// Data URIs for the vendored default set are encoded lazily per piece code,
-// so boards that never show a piece never encode its artwork.
-const defaultPieceUrls = new Map<string, string>();
-
-function defaultPieceUrl(color: Color, role: Role): string {
-  const code = `${color[0]}${pieceLetters[role]}` as keyof typeof defaultPieces;
-  let url = defaultPieceUrls.get(code);
-  if (url === undefined) {
-    // Trim guards the XML declaration: leading template-literal whitespace
-    // before <?xml makes the whole document invalid.
-    url = `data:image/svg+xml,${encodeURIComponent(defaultPieces[code].trim())}`;
-    defaultPieceUrls.set(code, url);
-  }
-  return url;
-}
-
 // Data URIs for caller-supplied {@link PieceSources}, cached per object so
 // repeated paints never re-encode. Validated inputs are copies, so entries
 // garbage-collect with the caller's object.
@@ -431,7 +415,11 @@ export function createChessboard(
           ? `${pieceSet}${piece.color[0]}${pieceLetters[piece.role]}.svg`
           : pieceSet !== undefined
             ? sourcesDataUri(pieceSet, piece.color, piece.role)
-            : defaultPieceUrl(piece.color, piece.role);
+            : sourcesDataUri(
+                vendoredPieceSets.cburnett,
+                piece.color,
+                piece.role,
+              );
       if (node.style.backgroundImage !== `url("${url}")`) {
         node.style.backgroundImage = `url("${url}")`;
       }

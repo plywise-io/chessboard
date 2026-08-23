@@ -72,12 +72,12 @@ POSSIBILITY OF SUCH DAMAGE.
 
 These `.svg` files are the pristine vendored copies; they are not compiled or
 served directly. The renderer embeds them via the generated module
-`src/internal/defaultPieces.ts`.
+`src/internal/pieceSets.gen.ts` (key `cburnett`).
 
 ## Regenerating the embedded module
 
 From the repository root:
 
 ```sh
-node scripts/gen-default-pieces.mjs
+node scripts/gen-piece-sets.mjs
 ```

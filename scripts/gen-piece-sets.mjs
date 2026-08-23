@@ -18,6 +18,7 @@ const codes = [
   "bP",
 ];
 const sets = [
+  ["cburnett", "cburnett"],
   ["rhosgfx", "rhosgfx"],
   ["kiwenSuwi", "kiwen-suwi"],
   ["chessnut", "chessnut"],
@@ -50,6 +51,5 @@ for (const [key, dir] of sets) {
   }
   out += "  },\n";
 }
-
-out += "} as const;\n";
+out += "};\n";
 writeFileSync("packages/chessboard/src/internal/pieceSets.gen.ts", out);

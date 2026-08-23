@@ -155,8 +155,8 @@ function App() {
   );
   const [drawn, setDrawn] = useState<readonly Annotation[]>([]);
   const [pieceSetName, setPieceSetName] = useState<
-    PieceSetName | "default" | "glyphs"
-  >("default");
+    PieceSetName | "cburnett" | "glyphs"
+  >("cburnett");
   const [themeName, setThemeName] = useState<BoardThemeName>("brown");
   const stateRef = useRef({ position });
   useEffect(() => {
@@ -263,7 +263,7 @@ function App() {
   const mergedAnnotations = useMemo(() => [...ANNOTATIONS, ...drawn], [drawn]);
 
   const pieceSetProp =
-    pieceSetName === "default"
+    pieceSetName === "cburnett"
       ? undefined
       : pieceSetName === "glyphs"
         ? null
@@ -292,11 +292,11 @@ function App() {
             value={pieceSetName}
             onChange={(event) =>
               setPieceSetName(
-                event.target.value as PieceSetName | "default" | "glyphs",
+                event.target.value as PieceSetName | "cburnett" | "glyphs",
               )
             }
           >
-            <option value="default">Default (vendored)</option>
+            <option value="cburnett">Cburnett (vendored)</option>
             {Object.keys(pieceSets).map((name) => (
               <option key={name} value={name}>
                 {name}

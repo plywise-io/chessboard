@@ -180,14 +180,16 @@ Pieces default to Unicode glyphs. Pass a `pieceSet` base URL (config, `set`, or 
 ```ts
 import { createChessboard, pieceSets } from "@plywise/chessboard";
 
-createChessboard(host, { position, pieceSet: pieceSets.rhosgfx });
+createChessboard(host, { position, pieceSet: pieceSets.firi });
 ```
 
-Curated sets carry permissive licenses only (served via jsDelivr, or self-host the files and pass your own base URL):
+Curated sets carry permissive licenses only (served via jsDelivr, or self-host the files and pass your own base URL). firi is the recommended default — modern gradient on chess.com-class silhouettes; rhosgfx is the leanest flat public-domain fallback:
 
 | Set | License | Look |
 | --- | --- | --- |
-| `pieceSets.rhosgfx` | CC0-1.0 | Public-domain, no attribution required |
+| `pieceSets.firi` | CC BY 4.0 (attribution) | Modern gradient, chess.com-class silhouettes (default) |
+| `pieceSets.rhosgfx` | CC0-1.0 | Flat clean, no attribution required |
+| `pieceSets.kiwenSuwi` | CC BY 4.0 (attribution) | Hand-drawn minimal set |
 | `pieceSets.chessnut` | Apache-2.0 | Flat modern set, pinned upstream commit |
 | `pieceSets.fantasy` | MIT | Classical set by Maurizio Monge |
 | `pieceSets.spatial` | MIT | Geometric set by Maurizio Monge |
@@ -195,7 +197,7 @@ Curated sets carry permissive licenses only (served via jsDelivr, or self-host t
 
 Square colors come from the `theme` option (`{ light?, dark? }`) or the `--pw-light-square`/`--pw-dark-square` variables. `boardThemes` ships `brown` (default), `blue`, and `green`; `theme: null` restores the stylesheet defaults. Mark and annotation colors stay CSS-variable driven.
 
-Licensing note: the curated catalog is copyleft-free on purpose — rhosgfx is CC0, chessnut is Apache-2.0 (keep the upstream notice when you distribute the artwork), and fantasy, spatial, and celtic are MIT artwork by Maurizio Monge. Omitting `pieceSet` renders Unicode glyphs and involves no asset license. Licenses were verified against lila's `COPYING.md` and each upstream `LICENSE`.
+Licensing note: the curated catalog is copyleft-free on purpose. rhosgfx is CC0; firi and kiwen-suwi are CC BY 4.0 (you must keep their attribution in your app's credits/docs — see the NOTICE in `packages/chessboard/src/index.ts`); chessnut is Apache-2.0 (retain upstream NOTICE when distributing the artwork); fantasy, spatial, and celtic are MIT artwork by Maurizio Monge. Omitting `pieceSet` renders Unicode glyphs and involves no asset license. Licenses were verified against lila's `COPYING.md` and each upstream `LICENSE`.
 
 ## Lifecycle
 

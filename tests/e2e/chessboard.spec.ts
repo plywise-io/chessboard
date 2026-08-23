@@ -45,8 +45,22 @@ test("renders the initial position responsively", async ({ page }) => {
   const board = page.locator(".pw-board");
   await expect(board).toHaveAttribute("aria-label", "Demo chess position");
   await expect(page.locator(".pw-piece")).toHaveCount(32);
-  await expect(page.locator('[data-square="e1"]')).toHaveText("♔");
-  await expect(page.locator('[data-square="e8"]')).toHaveText("♚");
+  await expect(page.locator('[data-square="e1"]')).toHaveAttribute(
+    "data-role",
+    "king",
+  );
+  await expect(page.locator('[data-square="e1"]')).toHaveAttribute(
+    "data-color",
+    "white",
+  );
+  await expect(page.locator('[data-square="e8"]')).toHaveAttribute(
+    "data-role",
+    "king",
+  );
+  await expect(page.locator('[data-square="e8"]')).toHaveAttribute(
+    "data-color",
+    "black",
+  );
 
   await page.setViewportSize({ width: 400, height: 700 });
   const boardBox = await board.boundingBox();

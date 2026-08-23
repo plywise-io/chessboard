@@ -105,15 +105,22 @@ const PIECE_SET_CDN =
 
 /**
  * Curated permissively licensed piece sets, each a base URL of
- * `{w|b}{P,N,B,R,Q,K}.svg` files. rhosgfx is CC0 1.0; chessnut is
- * Apache-2.0 (pinned commit — the repository has no tagged release);
- * fantasy, spatial, and celtic are MIT artwork by Maurizio Monge served
- * from the lichess asset mirror. Licenses verified against lila's
+ * `{w|b}{P,N,B,R,Q,K}.svg` files. firi and kiwen-suwi are CC BY 4.0 (attribution
+ * required, commercial use OK — see NOTICE below); rhosgfx is CC0 1.0;
+ * chessnut is Apache-2.0 (pinned commit — the repository has no tagged
+ * release); fantasy, spatial, and celtic are MIT artwork by Maurizio Monge
+ * served from the lichess asset mirror. Licenses verified against lila's
  * COPYING.md and each upstream LICENSE file. Omitting `pieceSet` renders
  * built-in Unicode glyphs and involves no asset license.
+ *
+ * NOTICE (required when distributing this package or its artifacts):
+ *   - `firi`      © James Faure — https://github.com/jfaure/Firi-pieceset
+ *   - `kiwenSuwi` © neverRare   — https://lichess.org/@/neverRare
  */
 export const pieceSets: Readonly<Record<string, string>> = {
+  firi: `${PIECE_SET_CDN}firi/`,
   rhosgfx: `${PIECE_SET_CDN}rhosgfx/`,
+  kiwenSuwi: `${PIECE_SET_CDN}kiwen-suwi/`,
   chessnut:
     "https://cdn.jsdelivr.net/gh/LexLuengas/chessnut-pieces@2b8eaf14a31edad7e9deb53b1473e1d4857868a9/",
   fantasy: `${PIECE_SET_CDN}fantasy/`,

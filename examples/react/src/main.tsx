@@ -141,7 +141,7 @@ function App() {
     () => new Set(),
   );
   const [drawn, setDrawn] = useState<readonly Annotation[]>([]);
-  const [pieceSetName, setPieceSetName] = useState("glyphs");
+  const [pieceSetName, setPieceSetName] = useState("firi");
   const [themeName, setThemeName] = useState("brown");
   const stateRef = useRef({ position });
   useEffect(() => {

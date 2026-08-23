@@ -27,6 +27,8 @@
     "dist/internal/values.js",
     "dist/internal/defaultPieces.d.ts",
     "dist/internal/defaultPieces.js",
+    "dist/internal/pieceSets.gen.d.ts",
+    "dist/internal/pieceSets.gen.js",
     "dist/style.css",
     "dist/style.d.ts"
   ],

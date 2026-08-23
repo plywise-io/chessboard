@@ -154,9 +154,9 @@ function App() {
     () => new Set(),
   );
   const [drawn, setDrawn] = useState<readonly Annotation[]>([]);
-  const [pieceSetName, setPieceSetName] = useState<PieceSetName | "glyphs">(
-    "firi",
-  );
+  const [pieceSetName, setPieceSetName] = useState<
+    PieceSetName | "default" | "glyphs"
+  >("default");
   const [themeName, setThemeName] = useState<BoardThemeName>("brown");
   const stateRef = useRef({ position });
   useEffect(() => {
@@ -262,6 +262,13 @@ function App() {
 
   const mergedAnnotations = useMemo(() => [...ANNOTATIONS, ...drawn], [drawn]);
 
+  const pieceSetProp =
+    pieceSetName === "default"
+      ? undefined
+      : pieceSetName === "glyphs"
+        ? null
+        : pieceSets[pieceSetName];
+
   return (
     <main>
       <h1>Plywise Chessboard</h1>
@@ -272,7 +279,7 @@ function App() {
         animationMs={150}
         interaction={interaction}
         annotations={showAnnotations ? mergedAnnotations : NO_ANNOTATIONS}
-        pieceSet={pieceSetName === "glyphs" ? null : pieceSets[pieceSetName]}
+        {...(pieceSetProp === undefined ? {} : { pieceSet: pieceSetProp })}
         theme={boardThemes[themeName]}
         presentation={presentation}
         {...(visibleLayers === undefined ? {} : { visibleLayers })}
@@ -284,15 +291,18 @@ function App() {
             data-testid="piece-set"
             value={pieceSetName}
             onChange={(event) =>
-              setPieceSetName(event.target.value as PieceSetName | "glyphs")
+              setPieceSetName(
+                event.target.value as PieceSetName | "default" | "glyphs",
+              )
             }
           >
-            <option value="glyphs">Unicode glyphs</option>
+            <option value="default">Default (vendored)</option>
             {Object.keys(pieceSets).map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>
             ))}
+            <option value="glyphs">Unicode glyphs</option>
           </select>
         </label>
         <label>

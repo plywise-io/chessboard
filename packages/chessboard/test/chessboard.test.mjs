@@ -1858,6 +1858,74 @@ test("renders the vendored default piece set without a pieceSet option", () => {
   assert.equal(king.textContent, "♔");
 });
 
+test("renders embedded PieceSources objects and validates them atomically", () => {
+  const dom = new JSDOM('<div id="host"></div>');
+  const host = dom.window.document.querySelector("#host");
+  const codes = [
+    "wK",
+    "wQ",
+    "wR",
+    "wB",
+    "wN",
+    "wP",
+    "bK",
+    "bQ",
+    "bR",
+    "bB",
+    "bN",
+    "bP",
+  ];
+  const sources = Object.fromEntries(
+    codes.map((code) => [
+      code,
+      `<svg xmlns="http://www.w3.org/2000/svg"><g id="${code}"/></svg>`,
+    ]),
+  );
+  const position = new Map([
+    ["a1", { color: "white", role: "king" }],
+    ["e7", { color: "black", role: "pawn" }],
+  ]);
+  const board = createChessboard(host, {
+    position,
+    animationMs: 0,
+    pieceSet: sources,
+  });
+  const king = host.querySelector('[data-square="a1"]');
+  const pawn = host.querySelector('[data-square="e7"]');
+  const kingUri = king.style.backgroundImage
+    .toLowerCase()
+    .match(/^url\("data:image\/svg\+xml,(.*)"\)$/)[1];
+  assert.match(decodeURIComponent(kingUri).toLowerCase(), /id="wk"/);
+  assert.match(
+    decodeURIComponent(pawn.style.backgroundImage.toLowerCase()).toLowerCase(),
+    /id="bp"/,
+  );
+
+  // Validation rejects incomplete, unknown, and mistyped sources atomically.
+  const { bB: _dropped, ...incomplete } = sources;
+  assert.throws(
+    () => createChessboard(host, { position, pieceSet: incomplete }),
+    /pieceSet\.bB must be a non-empty SVG source string/,
+  );
+  assert.throws(
+    () =>
+      createChessboard(host, {
+        position,
+        pieceSet: { ...sources, wZ: "<svg/>" },
+      }),
+    /pieceSet has unknown piece code: wZ/,
+  );
+  assert.throws(
+    () => createChessboard(host, { position, pieceSet: { ...sources, wK: 5 } }),
+    /pieceSet\.wK must be a non-empty SVG source string/,
+  );
+
+  // Glyphs remain reachable through null on update.
+  board.set({ pieceSet: null });
+  assert.equal(king.style.backgroundImage, "");
+  assert.equal(king.textContent, "♔");
+});
+
 test("rejects invalid pieceSet and theme values", () => {
   const dom = new JSDOM('<div id="host"></div>');
   const host = dom.window.document.querySelector("#host");

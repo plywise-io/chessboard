@@ -5,6 +5,7 @@ import type {
   ChessboardUpdate,
   Color,
   Interaction,
+  PieceSources,
   Position,
   Presentation,
   Square,
@@ -34,6 +35,7 @@ export type {
   MoveEvent,
   Piece,
   PieceSetName,
+  PieceSources,
   Position,
   Presentation,
   Rank,
@@ -53,7 +55,7 @@ export interface ChessboardProps
   readonly presentation?: Presentation;
   readonly annotations?: readonly Annotation[];
   readonly visibleLayers?: ReadonlySet<string>;
-  readonly pieceSet?: string | null;
+  readonly pieceSet?: PieceSources | string | null;
   readonly theme?: BoardTheme | null;
 }
 

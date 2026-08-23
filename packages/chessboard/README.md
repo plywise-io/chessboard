@@ -40,6 +40,7 @@ import type {
   JsonValue,
   ChessboardConfig, ChessboardUpdate, Chessboard,
   Destinations, Interaction, InteractionEvent, Presentation, LastMove,
+  PieceSources, pieceSets,
 } from "@plywise/chessboard";
 
 ```
@@ -50,13 +51,25 @@ import type {
 - `Role`: `"pawn" | "knight" | "bishop" | "rook" | "queen" | "king"`.
 - `Piece`: `{ readonly color: Color; readonly role: Role }`.
 - `Position`: `ReadonlyMap<Square, Piece>`. The renderer validates and copies it at the seam.
+- `PieceSources`: `{ readonly wK: string; readonly wQ: string; readonly wR: string; readonly wB: string; readonly wN: string; readonly wP: string; readonly bK: string; readonly bQ: string; readonly bR: string; readonly bB: string; readonly bN: string; readonly bP: string }`. Each key is a non-empty raw SVG source string; the renderer serves the entries as `data:image/svg+xml` URIs.
+- `pieceSets`: `{ readonly rhosgfx: PieceSources; readonly kiwenSuwi: PieceSources; readonly chessnut: PieceSources; readonly spatial: PieceSources; readonly celtic: PieceSources }`. Curated raw-SVG catalogs vendored into the package; no network fetch is ever performed.
 - `AnnotationModifier`: `"alt" | "ctrl" | "meta" | "shift"`. `meta` matches the Command key on macOS keyboards.
 - `AnnotationGesture`: `{ readonly modifiers?: readonly AnnotationModifier[]; readonly color?: string }`. A caller-supplied binding from modifier set to CSS colour string.
 
 ### Configuration and updates
 
-- `ChessboardConfig`: `{ position, orientation?, ariaLabel?, animationMs?, interaction?, presentation?, annotations?, visibleLayers? }`.
-- `ChessboardUpdate`: `{ position?, orientation?, ariaLabel?, animationMs?, interaction?, presentation?, annotations?, visibleLayers? }`. Every field is optional; omitted fields are left unchanged. `interaction: null` disables interaction and clears transient pointer state.
+- `ChessboardConfig`: `{ position, orientation?, ariaLabel?, animationMs?, pieceSet?, theme?, interaction?, presentation?, annotations?, visibleLayers? }`.
+- `ChessboardUpdate`: `{ position?, orientation?, ariaLabel?, animationMs?, pieceSet?, theme?, interaction?, presentation?, annotations?, visibleLayers? }`. Every field is optional; omitted fields are left unchanged. `interaction: null` disables interaction and clears transient pointer state.
+
+### Piece sets (`pieceSet`)
+
+`pieceSet` is optional. Omission renders the vendored Cburnett default artwork (BSD-3-Clause, see `assets/cburnett/LICENSE.md`). The accepted types are:
+
+- `PieceSources`: an object with `wK, wQ, wR, wB, wN, wP, bK, bQ, bR, bB, bN, bP` — each key is a non-empty raw SVG source string. The renderer serves them as `data:image/svg+xml` URIs and never reaches the network. The curated entries in `pieceSets` (`rhosgfx`, `kiwenSuwi`, `chessnut`, `spatial`, `celtic`) are this shape — vendored raw SVG sources embedded in the bundle.
+- `string`: a base URL pointing at a directory that holds `{w|b}{P,N,B,R,Q,K}.svg` files. Useful for callers who self-host their own artwork; the renderer fetches each file at render time.
+- `null`: restores Unicode glyphs and involves no asset license.
+
+Bundled catalogs carry permissive licenses only: `rhosgfx` is CC0; `kiwenSuwi` is CC BY 4.0 (attribution required); `chessnut` is Apache-2.0; `spatial` and `celtic` are MIT by Maurizio Monge. Per-file SHA-1 provenance and upstream links live in `assets/SETS.md`.
 
 ### Interaction
 
@@ -145,13 +158,16 @@ type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } |
 
 `createChessboard(host: HTMLElement, config: ChessboardConfig): Chessboard` returns a controller exposing:
 
-- `set(update: ChessboardUpdate): void` — forwards every optional field. Omitted means unchanged.
+- `set(update: ChessboardUpdate): void` — forwards every optional field, including `pieceSet` (`PieceSources` object, base-URL string, or `null`) and `theme`. Omitted means unchanged. Pass `null` to either option to restore Unicode glyphs / stylesheet square colors.
 - `move(from: Square, to: Square): void` — caller-approved single-piece move. Reuses the moving DOM node; removes only the captured node.
 - `destroy(): void` — idempotent; safe to call repeatedly.
 
 ## Validation
 
-Every public input is validated at the boundary:
+Every public input is validated at the boundary. Bad `pieceSet` values throw `TypeError` with one of:
+- `pieceSet must be a non-empty URL string, a PieceSources object, or null`
+- `pieceSet has unknown piece code: <key>`
+- `pieceSet.<code> must be a non-empty SVG source string`
 
 - invalid squares, pieces, colors, orientations, animation durations, interaction inputs (including malformed `annotationGestures`), presentation inputs, annotations, and layer visibility values throw `TypeError`;
 - `set` or `move` after `destroy` throw `Error`;

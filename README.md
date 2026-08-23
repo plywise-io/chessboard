@@ -202,51 +202,66 @@ The renderer exposes CSS custom properties on `.pw-board`:
 
 Animation duration is non-negative; `0` switches to instant updates. Direct drag positioning is unanimated by design.
 
-## Piece sets and board themes
-
-Pieces default to the vendored **Cburnett** set (the standard Wikimedia Commons SVG
-chess pieces), embedded in the bundle as data URIs so the default rendering needs no
-network. Pass a `pieceSet` base URL (config, `set`, or React prop) to render any
-directory of `{w|b}{P,N,B,R,Q,K}.svg` files instead; `null` restores Unicode glyphs:
+Pieces come from the vendored **Cburnett** default artwork, embedded in the
+bundle as data URIs so rendering never touches a network. Pass a `pieceSet`
+to swap styles or host your own assets:
 
 ```ts
 import { createChessboard, pieceSets } from "@plywise/chessboard";
 
-createChessboard(host, { position, pieceSet: pieceSets.firi });
+// Built-in curated set, shipped as raw SVG sources.
+createChessboard(host, { position, pieceSet: pieceSets.kiwenSuwi });
+
+// Your own assets: a base URL pointing at {w|b}{P,N,B,R,Q,K}.svg.
+createChessboard(host, {
+  position,
+  pieceSet: "https://example.com/pieces/spatial/",
+});
+
+// Unicode glyphs.
+createChessboard(host, { position, pieceSet: null });
+
+// Omit the option to render the vendored Cburnett default.
+createChessboard(host, { position });
 ```
 
-Curated remote sets carry permissive licenses only (served via jsDelivr, or self-host
-the files and pass your own base URL). firi is the strongest modern look; rhosgfx is
-the leanest flat public-domain fallback:
+`pieceSet` accepts a `PieceSources` object (`{ wK, wQ, wR, wB, wN, wP, bK, bQ,
+bR, bB, bN, bP }` — each a raw SVG source string), a plain base-URL string
+for callers who want to self-host a directory of `{w|b}{P,N,B,R,Q,K}.svg`
+files, `null` to render Unicode glyphs, or omission to use the vendored
+Cburnett default. The curated entries in `pieceSets` ship inside the package
+as embedded raw SVG sources (`{@link PieceSources}`-shaped objects); the
+renderer serves them as `data:image/svg+xml` URIs so they never reach the
+network. The vendored catalog contains five curated entries and nothing
+else:
 
 | Set | License | Look |
 | --- | --- | --- |
-| `pieceSets.firi` | CC BY 4.0 (attribution) | Modern gradient, chess.com-class silhouettes |
-
 | `pieceSets.rhosgfx` | CC0-1.0 | Flat clean, no attribution required |
-| `pieceSets.kiwenSuwi` | CC BY 4.0 (attribution) | Hand-drawn minimal set |
-| `pieceSets.chessnut` | Apache-2.0 | Flat modern set, pinned upstream commit |
-| `pieceSets.fantasy` | MIT | Classical set by Maurizio Monge |
+| `pieceSets.kiwenSuwi` | CC BY 4.0 (attribution) | Hand-drawn minimal set by neverRare |
+| `pieceSets.chessnut` | Apache-2.0 | Flat modern set by Lex Luengas |
 | `pieceSets.spatial` | MIT | Geometric set by Maurizio Monge |
 | `pieceSets.celtic` | MIT | Celtic set by Maurizio Monge |
 
-Square colors come from the `theme` option (`{ light?, dark? }`) or the `--pw-light-square`/`--pw-dark-square` variables. `boardThemes` ships five palettes: `brown` (lichess default), `blue` (chess.com default), `green` (lichess green theme), `walnut` (FIDE-style tournament buff/walnut), and `slate` (minimalist monochrome). `theme: null` restores the stylesheet defaults. Mark and annotation colors stay CSS-variable driven.
-
-Licensing note: the default set is Cburnett artwork by Colin M.L. Burnett, vendored
-under its BSD-3-Clause option — retain the notice in
-`packages/chessboard/assets/cburnett/LICENSE.md` when distributing this package or its
-artifacts. The curated remote catalog is copyleft-free on purpose: rhosgfx is CC0; firi
-and kiwen-suwi are CC BY 4.0 (you must keep their attribution in your app's credits/docs
-— see the NOTICE in `packages/chessboard/src/index.ts`); chessnut is Apache-2.0 (retain
-upstream NOTICE when distributing the artwork); fantasy, spatial, and celtic are MIT
-artwork by Maurizio Monge. `pieceSet: null` renders Unicode glyphs and involves no
-asset license. Licenses were verified against lila's `COPYING.md`, each upstream
-`LICENSE`, and the Wikimedia Commons file pages for the vendored set.
+Licensing note: the default set is Cburnett artwork by Colin M.L. Burnett,
+vendored under its BSD-3-Clause option — retain the notice in
+`packages/chessboard/assets/cburnett/LICENSE.md` when distributing this
+package or its artifacts. The bundled curated entries stay copyleft-free on
+purpose: `rhosgfx` is CC0; `kiwenSuwi` is CC BY 4.0 (keep the attribution in
+your app's credits/docs); `chessnut` is Apache-2.0 (retain the upstream
+NOTICE when distributing the artwork); `spatial` and `celtic` are MIT artwork
+by Maurizio Monge. `pieceSet: null` renders Unicode glyphs and involves no
+asset license. The NOTICE entries `kiwenSuwi` © neverRare, `chessnut` © Lex
+Luengas, and `spatial` / `celtic` © Maurizio Monge must travel with this
+package or any artifact that embeds it; per-file SHA-1 provenance and
+upstream links live in `packages/chessboard/assets/SETS.md`. Licenses were
+verified against lila's `COPYING.md`, each upstream `LICENSE`, and the
+Wikimedia Commons file pages for the vendored set.
 
 ## Lifecycle
 
 - `createChessboard(host, config)` returns a controller. The renderer validates inputs at the boundary and throws `TypeError` for invalid squares, pieces, colors, orientations, animation durations, interaction inputs, presentation inputs, annotations, layer visibility, and any other public value.
-- `set(update)` forwards controlled changes: position replacement, approved single-piece `move`, orientation flip, `ariaLabel`, `animationMs`, `interaction`, `presentation`, `annotations`, `visibleLayers`, `pieceSet`, `theme`. Omitted fields are left unchanged; boards created without `pieceSet` render the vendored default set, `pieceSet: null` restores glyphs, `theme: null` restores stylesheet square colors, and `interaction: null` disables interaction and clears transient pointer state.
+- `set(update)` forwards controlled changes: position replacement, approved single-piece `move`, orientation flip, `ariaLabel`, `animationMs`, `interaction`, `presentation`, `annotations`, `visibleLayers`, `pieceSet` (`PieceSources` object, base-URL string, or `null`), `theme`. Omitted fields are left unchanged; boards created without `pieceSet` render the vendored default set, `pieceSet: null` restores glyphs, `theme: null` restores stylesheet square colors, and `interaction: null` disables interaction and clears transient pointer state.
 - `move(from, to)` is the caller-approved single-piece move. It preserves the moving DOM node, removes only the captured node, and does not animate if `animationMs` is `0`.
 - `destroy()` is idempotent and safe to call repeatedly. Calls to `set` or `move` after `destroy` throw `Error`. The DOM subtree is removed on destroy.
 

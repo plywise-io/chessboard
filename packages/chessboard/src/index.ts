@@ -1,4 +1,5 @@
 import { defaultPieces } from "./internal/defaultPieces.js";
+import { vendoredPieceSets } from "./internal/pieceSets.gen.js";
 import {
   type BoardFile,
   type BoardRole,
@@ -110,35 +111,41 @@ export interface BoardTheme {
   readonly dark?: string;
 }
 
-const PIECE_SET_CDN =
-  "https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/";
+/** Raw SVG sources for one piece set, keyed by `{w|b}{P,N,B,R,Q,K}` codes. */
+export interface PieceSources {
+  readonly wK: string;
+  readonly wQ: string;
+  readonly wR: string;
+  readonly wB: string;
+  readonly wN: string;
+  readonly wP: string;
+  readonly bK: string;
+  readonly bQ: string;
+  readonly bR: string;
+  readonly bB: string;
+  readonly bN: string;
+  readonly bP: string;
+}
 
 /**
- * Curated permissively licensed piece sets, each a base URL of
- * `{w|b}{P,N,B,R,Q,K}.svg` files. firi and kiwen-suwi are CC BY 4.0 (attribution
- * required, commercial use OK — see NOTICE below); rhosgfx is CC0 1.0;
- * chessnut is Apache-2.0 (pinned commit — the repository has no tagged
- * release); fantasy, spatial, and celtic are MIT artwork by Maurizio Monge
- * served from the lichess asset mirror. Licenses verified against lila's
- * COPYING.md and each upstream LICENSE file. Omitting `pieceSet` renders
- * the vendored default set (Cburnett artwork under its BSD-3-Clause option —
- * see assets/cburnett/LICENSE.md).
+ * Curated piece sets vendored into the package as raw SVG sources; the
+ * renderer serves them as `data:image/svg+xml` URIs, so rendering never
+ * touches a network. rhosgfx is CC0 1.0; kiwen-suwi is CC BY 4.0
+ * (attribution required); chessnut is Apache-2.0 (pinned upstream commit);
+ * spatial and celtic are MIT artwork by Maurizio Monge.
  *
  * NOTICE (required when distributing this package or its artifacts):
- *   - default    © Colin M.L. Burnett — https://commons.wikimedia.org/wiki/User:Cburnett
- *   - `firi`      © James Faure — https://github.com/jfaure/Firi-pieceset
+ *   - default     © Colin M.L. Burnett — see assets/cburnett/LICENSE.md
  *   - `kiwenSuwi` © neverRare   — https://lichess.org/@/neverRare
+ * Full licenses and per-file provenance: packages/chessboard/assets/SETS.md.
  */
 export const pieceSets = {
-  firi: `${PIECE_SET_CDN}firi/`,
-  rhosgfx: `${PIECE_SET_CDN}rhosgfx/`,
-  kiwenSuwi: `${PIECE_SET_CDN}kiwen-suwi/`,
-  chessnut:
-    "https://cdn.jsdelivr.net/gh/LexLuengas/chessnut-pieces@2b8eaf14a31edad7e9deb53b1473e1d4857868a9/",
-  fantasy: `${PIECE_SET_CDN}fantasy/`,
-  spatial: `${PIECE_SET_CDN}spatial/`,
-  celtic: `${PIECE_SET_CDN}celtic/`,
-} as const;
+  rhosgfx: vendoredPieceSets.rhosgfx,
+  kiwenSuwi: vendoredPieceSets.kiwenSuwi,
+  chessnut: vendoredPieceSets.chessnut,
+  spatial: vendoredPieceSets.spatial,
+  celtic: vendoredPieceSets.celtic,
+} as const satisfies Record<string, PieceSources>;
 
 /** Names of the curated piece sets in {@link pieceSets}. */
 export type PieceSetName = keyof typeof pieceSets;
@@ -162,12 +169,13 @@ export interface ChessboardConfig {
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
   /**
-   * Base URL of a piece-set directory containing `{w|b}{P,N,B,R,Q,K}.svg`
-   * files (see {@link pieceSets}). Omitted renders the vendored default
-   * artwork (Cburnett, embedded data URIs); a string renders that
-   * directory's images; `null` renders built-in Unicode glyphs.
+   * Piece artwork: a {@link PieceSources} object with embedded SVG sources
+   * (see {@link pieceSets}), or a base URL of a directory containing
+   * `{w|b}{P,N,B,R,Q,K}.svg` files. Omitted renders the vendored default
+   * artwork (Cburnett, embedded data URIs); `null` renders built-in Unicode
+   * glyphs.
    */
-  readonly pieceSet?: string | null;
+  readonly pieceSet?: PieceSources | string | null;
   /** Square colors (see {@link boardThemes}); omit or pass `null` to reset. */
   readonly theme?: BoardTheme | null;
   readonly annotations?: readonly Annotation[];
@@ -192,7 +200,7 @@ export interface ChessboardUpdate {
    * the current piece set unchanged; `null` restores Unicode glyphs. The
    * vendored default can only be selected at creation time.
    */
-  readonly pieceSet?: string | null;
+  readonly pieceSet?: PieceSources | string | null;
   /**
    * Same contract as on {@link ChessboardConfig}. Omitting the field leaves
    * the current theme unchanged; `null` restores stylesheet defaults.
@@ -252,6 +260,33 @@ function defaultPieceUrl(color: Color, role: Role): string {
     // before <?xml makes the whole document invalid.
     url = `data:image/svg+xml,${encodeURIComponent(defaultPieces[code].trim())}`;
     defaultPieceUrls.set(code, url);
+  }
+  return url;
+}
+
+// Data URIs for caller-supplied {@link PieceSources}, cached per object so
+// repeated paints never re-encode. Validated inputs are copies, so entries
+// garbage-collect with the caller's object.
+const sourcesDataUris = new WeakMap<
+  PieceSources,
+  Record<keyof PieceSources, string>
+>();
+
+function sourcesDataUri(
+  sources: PieceSources,
+  color: Color,
+  role: Role,
+): string {
+  const code = `${color[0]}${pieceLetters[role]}` as keyof PieceSources;
+  let perSet = sourcesDataUris.get(sources);
+  if (perSet === undefined) {
+    perSet = {} as Record<keyof PieceSources, string>;
+    sourcesDataUris.set(sources, perSet);
+  }
+  let url = perSet[code];
+  if (url === undefined) {
+    url = `data:image/svg+xml,${encodeURIComponent(sources[code].trim())}`;
+    perSet[code] = url;
   }
   return url;
 }
@@ -320,7 +355,9 @@ export function createChessboard(
   let visibleLayers: ReadonlySet<string> | undefined = validateVisibleLayers(
     config.visibleLayers,
   );
-  let pieceSet: string | null | undefined = validatePieceSet(config.pieceSet);
+  let pieceSet: PieceSources | string | null | undefined = validatePieceSet(
+    config.pieceSet,
+  );
   let theme: BoardTheme | undefined = validateTheme(config.theme);
   let destroyed = false;
   // A pointerdown starts a candidate; the first move fills in the visual
@@ -392,7 +429,9 @@ export function createChessboard(
       const url =
         typeof pieceSet === "string"
           ? `${pieceSet}${piece.color[0]}${pieceLetters[piece.role]}.svg`
-          : defaultPieceUrl(piece.color, piece.role);
+          : pieceSet !== undefined
+            ? sourcesDataUri(pieceSet, piece.color, piece.role)
+            : defaultPieceUrl(piece.color, piece.role);
       if (node.style.backgroundImage !== `url("${url}")`) {
         node.style.backgroundImage = `url("${url}")`;
       }
@@ -1202,14 +1241,41 @@ function validateAnimation(value: number): number {
   return value;
 }
 
+const PIECE_CODES = Object.keys(vendoredPieceSets.rhosgfx);
 function validatePieceSet(
-  value: string | null | undefined,
-): string | null | undefined {
+  value: PieceSources | string | null | undefined,
+): PieceSources | string | null | undefined {
   if (value === null || value === undefined) return value;
-  if (typeof value !== "string" || value.length === 0) {
-    throw new TypeError("pieceSet must be a non-empty URL string or null");
+  if (typeof value === "string") {
+    if (value.length === 0) {
+      throw new TypeError(
+        "pieceSet must be a non-empty URL string, a PieceSources object, or null",
+      );
+    }
+    return value;
   }
-  return value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(
+      "pieceSet must be a non-empty URL string, a PieceSources object, or null",
+    );
+  }
+  const raw = value as unknown as Record<string, unknown>;
+  for (const key of Object.keys(raw)) {
+    if (!PIECE_CODES.includes(key)) {
+      throw new TypeError(`pieceSet has unknown piece code: ${key}`);
+    }
+  }
+  const sources = {} as Record<keyof PieceSources, string>;
+  for (const code of PIECE_CODES) {
+    const svg = raw[code];
+    if (typeof svg !== "string" || svg.length === 0) {
+      throw new TypeError(
+        `pieceSet.${code} must be a non-empty SVG source string`,
+      );
+    }
+    sources[code as keyof PieceSources] = svg;
+  }
+  return sources;
 }
 
 function validateTheme(

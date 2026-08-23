@@ -195,7 +195,7 @@ Curated sets carry permissive licenses only (served via jsDelivr, or self-host t
 | `pieceSets.spatial` | MIT | Geometric set by Maurizio Monge |
 | `pieceSets.celtic` | MIT | Celtic set by Maurizio Monge |
 
-Square colors come from the `theme` option (`{ light?, dark? }`) or the `--pw-light-square`/`--pw-dark-square` variables. `boardThemes` ships `brown` (default), `blue`, and `green`; `theme: null` restores the stylesheet defaults. Mark and annotation colors stay CSS-variable driven.
+Square colors come from the `theme` option (`{ light?, dark? }`) or the `--pw-light-square`/`--pw-dark-square` variables. `boardThemes` ships five palettes: `brown` (lichess default), `blue` (chess.com default), `green` (lichess green theme), `walnut` (FIDE-style tournament buff/walnut), and `slate` (minimalist monochrome). `theme: null` restores the stylesheet defaults. Mark and annotation colors stay CSS-variable driven.
 
 Licensing note: the curated catalog is copyleft-free on purpose. rhosgfx is CC0; firi and kiwen-suwi are CC BY 4.0 (you must keep their attribution in your app's credits/docs — see the NOTICE in `packages/chessboard/src/index.ts`); chessnut is Apache-2.0 (retain upstream NOTICE when distributing the artwork); fantasy, spatial, and celtic are MIT artwork by Maurizio Monge. Omitting `pieceSet` renders Unicode glyphs and involves no asset license. Licenses were verified against lila's `COPYING.md` and each upstream `LICENSE`.
 

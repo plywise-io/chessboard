@@ -8,7 +8,13 @@ import type {
   Square,
 } from "@plywise/chessboard";
 import "@plywise/chessboard/style.css";
-import { boardThemes, Chessboard, pieceSets } from "@plywise/chessboard-react";
+import {
+  type BoardThemeName,
+  boardThemes,
+  Chessboard,
+  type PieceSetName,
+  pieceSets,
+} from "@plywise/chessboard-react";
 import {
   StrictMode,
   useCallback,
@@ -141,8 +147,10 @@ function App() {
     () => new Set(),
   );
   const [drawn, setDrawn] = useState<readonly Annotation[]>([]);
-  const [pieceSetName, setPieceSetName] = useState("firi");
-  const [themeName, setThemeName] = useState("brown");
+  const [pieceSetName, setPieceSetName] = useState<PieceSetName | "glyphs">(
+    "firi",
+  );
+  const [themeName, setThemeName] = useState<BoardThemeName>("brown");
   const stateRef = useRef({ position });
   useEffect(() => {
     stateRef.current.position = position;
@@ -268,7 +276,9 @@ function App() {
           <select
             data-testid="piece-set"
             value={pieceSetName}
-            onChange={(event) => setPieceSetName(event.target.value)}
+            onChange={(event) =>
+              setPieceSetName(event.target.value as PieceSetName | "glyphs")
+            }
           >
             <option value="glyphs">Unicode glyphs</option>
             {Object.keys(pieceSets).map((name) => (
@@ -283,7 +293,9 @@ function App() {
           <select
             data-testid="board-theme"
             value={themeName}
-            onChange={(event) => setThemeName(event.target.value)}
+            onChange={(event) =>
+              setThemeName(event.target.value as BoardThemeName)
+            }
           >
             {Object.keys(boardThemes).map((name) => (
               <option key={name} value={name}>

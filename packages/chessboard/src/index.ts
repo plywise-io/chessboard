@@ -117,7 +117,7 @@ const PIECE_SET_CDN =
  *   - `firi`      © James Faure — https://github.com/jfaure/Firi-pieceset
  *   - `kiwenSuwi` © neverRare   — https://lichess.org/@/neverRare
  */
-export const pieceSets: Readonly<Record<string, string>> = {
+export const pieceSets = {
   firi: `${PIECE_SET_CDN}firi/`,
   rhosgfx: `${PIECE_SET_CDN}rhosgfx/`,
   kiwenSuwi: `${PIECE_SET_CDN}kiwen-suwi/`,
@@ -126,13 +126,21 @@ export const pieceSets: Readonly<Record<string, string>> = {
   fantasy: `${PIECE_SET_CDN}fantasy/`,
   spatial: `${PIECE_SET_CDN}spatial/`,
   celtic: `${PIECE_SET_CDN}celtic/`,
-};
+} as const;
 
-export const boardThemes: Readonly<Record<string, BoardTheme>> = {
+/** Names of the curated piece sets in {@link pieceSets}. */
+export type PieceSetName = keyof typeof pieceSets;
+
+export const boardThemes = {
   brown: { light: "#f0d9b5", dark: "#b58863" },
   blue: { light: "#dee3e6", dark: "#8ca2ad" },
   green: { light: "#ffffdd", dark: "#86a666" },
-};
+  walnut: { light: "#e8d7b5", dark: "#6b4226" },
+  slate: { light: "#eaebed", dark: "#707789" },
+} as const;
+
+/** Names of the curated board themes in {@link boardThemes}. */
+export type BoardThemeName = keyof typeof boardThemes;
 
 export interface ChessboardConfig {
   readonly position: Position;
@@ -339,14 +347,12 @@ export function createChessboard(
     `${validateAnimation(config.animationMs ?? 150)}ms`,
   );
   function applyTheme(next: BoardTheme | undefined): void {
-    for (const key of ["light", "dark"] as const) {
-      const color = next?.[key];
-      if (color === undefined) {
-        board.style.removeProperty(`--pw-${key}-square`);
-      } else {
-        board.style.setProperty(`--pw-${key}-square`, color);
-      }
-    }
+    const light = next?.light;
+    if (light === undefined) board.style.removeProperty("--pw-light-square");
+    else board.style.setProperty("--pw-light-square", light);
+    const dark = next?.dark;
+    if (dark === undefined) board.style.removeProperty("--pw-dark-square");
+    else board.style.setProperty("--pw-dark-square", dark);
   }
 
   function repaintPieceImage(node: HTMLDivElement, piece: Piece): void {
@@ -1142,11 +1148,11 @@ function validateTheme(
   if (!value || typeof value !== "object") {
     throw new TypeError("theme must be an object or null");
   }
-  for (const key of ["light", "dark"] as const) {
-    const color = value[key];
-    if (color !== undefined && typeof color !== "string") {
-      throw new TypeError(`theme.${key} must be a CSS color string`);
-    }
+  if (value.light !== undefined && typeof value.light !== "string") {
+    throw new TypeError("theme.light must be a CSS color string");
+  }
+  if (value.dark !== undefined && typeof value.dark !== "string") {
+    throw new TypeError("theme.dark must be a CSS color string");
   }
   return value;
 }

@@ -17,6 +17,7 @@ export type {
   Annotation,
   ArrowAnnotation,
   BoardTheme,
+  BoardThemeName,
   ChessboardConfig,
   ChessboardUpdate,
   CircleAnnotation,
@@ -30,6 +31,7 @@ export type {
   LastMove,
   MoveEvent,
   Piece,
+  PieceSetName,
   Position,
   Presentation,
   Rank,
@@ -147,17 +149,6 @@ export function Chessboard({
 
   useEffect(() => {
     const prior = previous.current;
-    const changed =
-      prior.position !== position ||
-      prior.orientation !== orientation ||
-      prior.boardLabel !== boardLabel ||
-      prior.animationMs !== animationMs ||
-      prior.interaction !== interaction ||
-      prior.presentation !== presentation ||
-      prior.annotations !== annotations ||
-      prior.visibleLayers !== visibleLayers ||
-      prior.pieceSet !== pieceSet ||
-      prior.theme !== theme;
     previous.current = {
       position,
       orientation,
@@ -170,7 +161,6 @@ export function Chessboard({
       pieceSet,
       theme,
     };
-    if (!changed) return;
 
     // A single-piece position change routes through the renderer's `move`
     // so the moving piece keeps its DOM node and transform transition.
@@ -204,7 +194,7 @@ export function Chessboard({
       ...(prior.pieceSet === pieceSet ? {} : { pieceSet }),
       ...(prior.theme === theme ? {} : { theme }),
     };
-    instance.current?.set(update);
+    if (Object.keys(update).length > 0) instance.current?.set(update);
   }, [
     animationMs,
     annotations,

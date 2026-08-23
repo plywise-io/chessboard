@@ -304,7 +304,7 @@ test("forwards annotations through React and reconciles by id", async () => {
 
   assert.equal(host.querySelector('[data-annotation-id="a"]'), null);
   assert.strictEqual(host.querySelector('[data-annotation-id="b"]'), bNode);
-  assert.equal(bNode.getAttribute("stroke"), "#0f0");
+  assert.equal(bNode.style.stroke, "rgb(0, 255, 0)");
   assert.ok(host.querySelector('[data-annotation-id="c"]'));
 
   const updated = [
@@ -371,6 +371,59 @@ test("interaction-disabled prop tears down pointer listeners without recreating 
   assert.equal(pieceAfter, pieceBefore);
   assert.equal(pieceAfter.dataset.dragging, undefined);
   assert.equal(pieceAfter.style.transform, "");
+
+  await act(() => root.unmount());
+  assert.equal(host.childElementCount, 0);
+});
+
+test("a single-piece position change reuses the moving piece node", async () => {
+  const dom = new JSDOM('<div id="root"></div>');
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+  const [{ act, createElement }, { createRoot }, { Chessboard }] =
+    await Promise.all([
+      import("react"),
+      import("react-dom/client"),
+      import("../dist/index.js"),
+    ]);
+  const host = document.querySelector("#root");
+  const root = createRoot(host);
+  const pawn = { color: "white", role: "pawn" };
+  const position = new Map([["e2", pawn]]);
+
+  await act(() =>
+    root.render(createElement(Chessboard, { position, orientation: "white" })),
+  );
+  const piece = host.querySelector('[data-square="e2"]');
+  assert.ok(piece);
+
+  // e2 -> e4 with the same piece object: one approved move, not a full
+  // position replacement, so the DOM node survives the update.
+  await act(() =>
+    root.render(
+      createElement(Chessboard, {
+        position: new Map([["e4", pawn]]),
+        orientation: "white",
+      }),
+    ),
+  );
+  assert.equal(host.querySelector('[data-square="e4"]'), piece);
+  assert.equal(piece.style.getPropertyValue("--pw-file"), "4");
+  assert.equal(piece.style.getPropertyValue("--pw-rank"), "4");
+
+  // A two-piece replacement is arbitrary: fresh nodes, no move inference.
+  const rebuilt = new Map([
+    ["e4", pawn],
+    ["d4", { color: "white", role: "pawn" }],
+  ]);
+  await act(() =>
+    root.render(createElement(Chessboard, { position: rebuilt })),
+  );
+  assert.equal(host.querySelector('[data-square="e4"]'), piece);
+  assert.notEqual(host.querySelector('[data-square="d4"]'), piece);
 
   await act(() => root.unmount());
   assert.equal(host.childElementCount, 0);

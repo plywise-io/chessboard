@@ -65,6 +65,8 @@ function Game() {
       const next = applyMove(position, event.from, event.to);
       if (next) setPosition(next);
       setDestinations(new Map());
+    } else if (event.type === "circle" || event.type === "arrow") {
+      toggleAnnotation(event); // right-button gesture: caller-owned state
     }
   }, [position]);
 
@@ -78,7 +80,7 @@ function Game() {
 }
 ```
 
-The adapter passes `onEvent` through directly to the core renderer. The core renderer always invokes the most recent callback without recreating the board.
+The adapter passes `onEvent` through directly to the core renderer. The core renderer always invokes the most recent callback without recreating the board. Right-button `circle`/`arrow` intents arrive through the same callback; the board suppresses the native context menu while `interaction` is enabled.
 
 ## Accessibility and theming
 

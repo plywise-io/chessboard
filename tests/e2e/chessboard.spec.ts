@@ -21,6 +21,24 @@ async function clickSquare(
   });
 }
 
+async function squareCenter(
+  page: Page,
+  square: string,
+  orientation: "white" | "black" = "white",
+): Promise<{ x: number; y: number }> {
+  const board = page.locator(".pw-board");
+  const box = await board.boundingBox();
+  if (!box) throw new Error("Board is not visible");
+  const file = square.charCodeAt(0) - "a".charCodeAt(0);
+  const rank = Number(square[1]) - 1;
+  const column = orientation === "white" ? file : 7 - file;
+  const row = orientation === "white" ? 7 - rank : rank;
+  return {
+    x: box.x + (column + 0.5) * (box.width / 8),
+    y: box.y + (row + 0.5) * (box.height / 8),
+  };
+}
+
 test("renders the initial position responsively", async ({ page }) => {
   await page.goto("/");
 
@@ -37,6 +55,37 @@ test("renders the initial position responsively", async ({ page }) => {
   expect(pieceBox).not.toBeNull();
   expect(boardBox?.width).toBe(boardBox?.height);
   expect(pieceBox?.width).toBe((boardBox?.width ?? 0) / 8);
+});
+
+test("puts a1 on a dark square", async ({ page }) => {
+  await page.goto("/");
+  const screenshot = await page.locator(".pw-board").screenshot();
+  const { a3, b3 } = await page.evaluate(async (base64) => {
+    const blob = await fetch(`data:image/png;base64,${base64}`).then(
+      (response) => response.blob(),
+    );
+    const image = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas context unavailable");
+    context.drawImage(image, 0, 0);
+    const pixel = (file: number, row: number) =>
+      [
+        ...context.getImageData(
+          (file + 0.5) * (image.width / 8),
+          (row + 0.5) * (image.height / 8),
+          1,
+          1,
+        ).data,
+      ].slice(0, 3);
+    return { a3: pixel(0, 5), b3: pixel(1, 5) };
+  }, screenshot.toString("base64"));
+
+  expect(a3.reduce((sum, channel) => sum + channel, 0)).toBeLessThan(
+    b3.reduce((sum, channel) => sum + channel, 0),
+  );
 });
 
 test("selects a source, marks destinations, and emits a select event", async ({
@@ -106,6 +155,25 @@ test("drags a piece to a legal destination and emits a drag event", async ({
   await page.mouse.move(box.x + 4.5 * square, box.y + 4.5 * square, {
     steps: 6,
   });
+  await page.waitForFunction(
+    () =>
+      (
+        document.querySelector(
+          '.pw-piece[data-square="e2"]',
+        ) as HTMLElement | null
+      )?.style.transform !== "",
+  );
+  const dragged = await page
+    .locator('.pw-piece[data-square="e2"]')
+    .boundingBox();
+  expect(dragged).not.toBeNull();
+  if (!dragged) return;
+  expect(
+    Math.abs(dragged.x + dragged.width / 2 - (box.x + 4.5 * square)),
+  ).toBeLessThan(2);
+  expect(
+    Math.abs(dragged.y + dragged.height / 2 - (box.y + 4.5 * square)),
+  ).toBeLessThan(2);
   await page.mouse.up();
 
   const eventLine = page.getByTestId("last-event");
@@ -223,7 +291,6 @@ test("annotations render, update on toggle, and flip with orientation", async ({
   const userArrow = page.locator('[data-annotation-id="user-arrow"]');
   await expect(userArrow).toHaveAttribute("data-annotation-kind", "arrow");
   await expect(userArrow).toHaveAttribute("data-annotation-layer", "user");
-  await expect(userArrow).toHaveAttribute("stroke", "#15781B");
   expect(
     await userArrow.evaluate((node) => getComputedStyle(node).stroke),
   ).toBe("rgb(21, 120, 27)");
@@ -435,5 +502,64 @@ test("pointer events with touch pointerType drive the drag path", async ({
 
   await expect(page.getByTestId("last-event")).toHaveText(
     /Last event: move e2→e4 \(drag\)/,
+  );
+});
+
+test("right-clicking a square toggles a circle annotation", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const d5 = await squareCenter(page, "d5");
+  await page.mouse.move(d5.x, d5.y);
+  await page.mouse.down({ button: "right" });
+  await page.mouse.up({ button: "right" });
+
+  const circle = page.locator('[data-annotation-id="circle:d5"]');
+  await expect(circle).toHaveAttribute("data-annotation-kind", "circle");
+  await expect(page.getByTestId("last-event")).toHaveText(
+    "Last event: circle d5",
+  );
+
+  // Same gesture again removes it.
+  await page.mouse.move(d5.x, d5.y);
+  await page.mouse.down({ button: "right" });
+  await page.mouse.up({ button: "right" });
+  await expect(page.locator('[data-annotation-id="circle:d5"]')).toHaveCount(0);
+});
+
+test("right-dragging between squares toggles an arrow annotation", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const e2 = await squareCenter(page, "e2");
+  const e4 = await squareCenter(page, "e4");
+  await page.mouse.move(e2.x, e2.y);
+  await page.mouse.down({ button: "right" });
+  await page.mouse.move(e4.x, e4.y, { steps: 4 });
+
+  // Transient snapped preview while the gesture is active.
+  await expect(
+    page.locator('[data-annotation-id="pw-preview"]'),
+  ).toHaveAttribute("data-annotation-kind", "arrow");
+
+  await page.mouse.up({ button: "right" });
+  const arrow = page.locator('[data-annotation-id="arrow:e2-e4"]');
+  await expect(arrow).toHaveAttribute("data-annotation-kind", "arrow");
+  await expect(page.getByTestId("last-event")).toHaveText(
+    "Last event: arrow e2→e4",
+  );
+  await expect(page.locator('[data-annotation-id="pw-preview"]')).toHaveCount(
+    0,
+  );
+
+  // Same drag again removes it.
+  await page.mouse.move(e2.x, e2.y);
+  await page.mouse.down({ button: "right" });
+  await page.mouse.move(e4.x, e4.y, { steps: 4 });
+  await page.mouse.up({ button: "right" });
+  await expect(page.locator('[data-annotation-id="arrow:e2-e4"]')).toHaveCount(
+    0,
   );
 });

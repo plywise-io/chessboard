@@ -568,7 +568,6 @@ test("annotations render one SVG layer with semantic attributes and stable geome
   assert.ok(arrow);
   assert.equal(arrow.getAttribute("data-annotation-kind"), "arrow");
   assert.equal(arrow.getAttribute("data-annotation-layer"), "user");
-  assert.equal(arrow.getAttribute("stroke"), "#15781B");
   assert.equal(arrow.style.stroke, "rgb(21, 120, 27)");
   // e2 -> e4 with white orientation: e file index 4, rank 2 -> file 4, row 6
   // SVG path centers at square centers (add 0.5)
@@ -582,8 +581,7 @@ test("annotations render one SVG layer with semantic attributes and stable geome
   assert.equal(circle.tagName.toLowerCase(), "circle");
   assert.equal(circle.getAttribute("cx"), "3.5");
   assert.equal(circle.getAttribute("cy"), "3.5");
-  // Default color: no stroke attribute when caller omits color
-  assert.equal(circle.getAttribute("stroke"), null);
+  // Default color: no inline stroke when caller omits color
   assert.equal(circle.style.stroke, "");
 
   board.destroy();
@@ -618,7 +616,6 @@ test("annotations reconcile by id; reorder/update/removal preserve unaffected no
   assert.strictEqual(host.querySelector('[data-annotation-id="a"]'), aNode);
   assert.strictEqual(host.querySelector('[data-annotation-id="b"]'), null);
   assert.strictEqual(host.querySelector('[data-annotation-id="c"]'), cNode);
-  assert.equal(cNode.getAttribute("stroke"), "#ff0");
   assert.equal(cNode.style.stroke, "rgb(255, 255, 0)");
 
   board.destroy();
@@ -765,6 +762,7 @@ function dispatchPointer(
     pointerType = "mouse",
     isPrimary = true,
     outside = false,
+    button = 0,
   } = {},
 ) {
   const board = host.querySelector(".pw-board");
@@ -781,7 +779,7 @@ function dispatchPointer(
   }
   const event = new host.ownerDocument.defaultView.PointerEvent(type, {
     bubbles: true,
-    button: 0,
+    button,
     clientX: x,
     clientY: y,
     pointerId,
@@ -1164,4 +1162,137 @@ test("annotation metadata accepts only copied JSON-compatible values", () => {
   }
   assert.throws(() => board.set({ visibleLayers: ["engine"] }), TypeError);
   assert.equal(host.querySelector('[data-annotation-id="valid"]'), valid);
+});
+
+// Right-button annotation gestures
+function dispatchContextMenu(host, square) {
+  const board = host.querySelector(".pw-board");
+  const rect = board.getBoundingClientRect();
+  const file = square.charCodeAt(0) - "a".charCodeAt(0);
+  const rank = Number(square[1]) - 1;
+  const event = new host.ownerDocument.defaultView.MouseEvent("contextmenu", {
+    bubbles: true,
+    cancelable: true,
+    clientX: rect.left + (file + 0.5) * (rect.width / 8),
+    clientY: rect.top + (7 - rank + 0.5) * (rect.height / 8),
+  });
+  board.dispatchEvent(event);
+  return event;
+}
+
+test("right-clicking a square emits a circle intent and prevents the context menu", () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        onEvent: (e) => events.push(e),
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "d5", { button: 2 });
+  dispatchPointer(host, "pointerup", "d5", { button: 2 });
+  assert.deepEqual(events, [
+    { type: "circle", square: "d5", origin: "pointer" },
+  ]);
+  assert.equal(host.querySelector('[data-annotation-id="pw-preview"]'), null);
+  const menu = dispatchContextMenu(host, "d5");
+  assert.equal(menu.defaultPrevented, true);
+});
+
+test("right-dragging between squares emits an arrow intent with a transient preview", async () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        onEvent: (e) => events.push(e),
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "e2", { button: 2 });
+  const preview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.ok(preview);
+  assert.equal(preview.getAttribute("data-annotation-kind"), "circle");
+  dispatchPointer(host, "pointermove", "e4", { button: 2 });
+  // Circle → arrow swaps the SVG element; re-query for the new node.
+  const arrowPreview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.equal(arrowPreview?.getAttribute("data-annotation-kind"), "arrow");
+  dispatchPointer(host, "pointerup", "e4", { button: 2 });
+  assert.deepEqual(events, [
+    { type: "arrow", from: "e2", to: "e4", origin: "pointer" },
+  ]);
+  assert.equal(host.querySelector('[data-annotation-id="pw-preview"]'), null);
+});
+
+test("right-dragging back onto the source square emits a circle intent", () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        onEvent: (e) => events.push(e),
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "e2", { button: 2 });
+  dispatchPointer(host, "pointermove", "e4", { button: 2 });
+  dispatchPointer(host, "pointermove", "e2", { button: 2 });
+  dispatchPointer(host, "pointerup", "e2", { button: 2 });
+  assert.deepEqual(events, [
+    { type: "circle", square: "e2", origin: "pointer" },
+  ]);
+});
+
+test("pointercancel during a draw gesture emits nothing and removes the preview", () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        onEvent: (e) => events.push(e),
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "e2", { button: 2 });
+  dispatchPointer(host, "pointermove", "e4", { button: 2 });
+  dispatchPointer(host, "pointercancel", "e4", { button: 2 });
+  assert.deepEqual(events, []);
+  assert.equal(host.querySelector('[data-annotation-id="pw-preview"]'), null);
+});
+
+test("right-button gestures are inert without interaction and keep the context menu", () => {
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+  );
+  dispatchPointer(host, "pointerdown", "d5", { button: 2 });
+  dispatchPointer(host, "pointerup", "d5", { button: 2 });
+  assert.equal(host.querySelector('[data-annotation-id="pw-preview"]'), null);
+  const menu = dispatchContextMenu(host, "d5");
+  assert.equal(menu.defaultPrevented, false);
+});
+
+test("left-click selection still works after right-button gestures", () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        onEvent: (e) => events.push(e),
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "d5", { button: 2 });
+  dispatchPointer(host, "pointerup", "d5", { button: 2 });
+  dispatchPointer(host, "pointerdown", "e2");
+  dispatchPointer(host, "pointerup", "e2");
+  assert.deepEqual(events, [
+    { type: "circle", square: "d5", origin: "pointer" },
+    { type: "select", square: "e2", origin: "pointer" },
+  ]);
 });

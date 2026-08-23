@@ -36,7 +36,23 @@ export type MoveEvent = {
   readonly to: Square;
   readonly origin: "selection" | "drag";
 };
-export type InteractionEvent = SelectEvent | ClearEvent | MoveEvent;
+export type CircleEvent = {
+  readonly type: "circle";
+  readonly square: Square;
+  readonly origin: "pointer";
+};
+export type ArrowEvent = {
+  readonly type: "arrow";
+  readonly from: Square;
+  readonly to: Square;
+  readonly origin: "pointer";
+};
+export type InteractionEvent =
+  | SelectEvent
+  | ClearEvent
+  | MoveEvent
+  | CircleEvent
+  | ArrowEvent;
 
 export type Destinations = ReadonlyMap<Square, readonly Square[]>;
 
@@ -202,10 +218,10 @@ export function createChessboard(
     : undefined;
   let checkedSquare: Square | undefined = initialPresentation.checked;
   let destinations: Destinations = interaction
-    ? new Map(interaction.destinations)
+    ? interaction.destinations
     : new Map();
-  let annotations: readonly Annotation[] = deepCloneAnnotationMetadata(
-    validateAnnotations(config.annotations),
+  let annotations: readonly Annotation[] = validateAnnotations(
+    config.annotations,
   );
   let visibleLayers: ReadonlySet<string> | undefined = validateVisibleLayers(
     config.visibleLayers,
@@ -218,11 +234,28 @@ export function createChessboard(
     readonly pointerId: number;
     piece: HTMLDivElement | null;
     rect: DOMRect | null;
+    // Pointer offset from the source square's visual origin at press time,
+    // so the piece keeps the grabbed point under the pointer while dragging.
+    readonly grabX: number;
+    readonly grabY: number;
     clientX: number;
     clientY: number;
     frame: number | null;
   };
   let drag: DragState | null = null;
+
+  // A right-button press starts an annotation gesture: release on the
+  // source square requests a circle, dragging to another square requests
+  // an arrow. The caller owns annotation state; the renderer shows only a
+  // transient snapped preview.
+  type DrawState = {
+    readonly source: Square;
+    readonly pointerId: number;
+    readonly rect: DOMRect;
+    preview: SVGElement | null;
+    previewKind: "arrow" | "circle" | null;
+  };
+  let draw: DrawState | null = null;
 
   const board = host.ownerDocument.createElement("div");
   const view = host.ownerDocument.defaultView;
@@ -306,14 +339,14 @@ export function createChessboard(
     node.setAttribute("data-annotation-id", annotation.id);
     node.setAttribute("data-annotation-kind", annotation.kind);
     node.setAttribute("data-annotation-layer", annotation.layer);
+    // Inline style rather than the SVG presentation attribute: the
+    // stylesheet's `.pw-annotations path|circle { stroke }` rule would
+    // override a presentation attribute anyway.
     if (annotation.color !== undefined) {
-      node.setAttribute("stroke", annotation.color);
       node.style.stroke = annotation.color;
     } else {
-      node.removeAttribute("stroke");
       node.style.removeProperty("stroke");
     }
-    node.removeAttribute("fill");
   }
 
   function renderAnnotations(next: readonly Annotation[]): void {
@@ -427,8 +460,8 @@ export function createChessboard(
     }
   }
 
-  function pointerTarget(event: PointerEvent): Square | null {
-    const rect = board.getBoundingClientRect();
+  function pointerTarget(event: PointerEvent, cached?: DOMRect): Square | null {
+    const rect = cached ?? board.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -464,24 +497,65 @@ export function createChessboard(
     }
   }
 
+  function contextMenu(event: MouseEvent): void {
+    // Right-button gestures own the context menu while the board is
+    // interactive; spectator boards keep the browser default.
+    if (interaction !== null) event.preventDefault();
+  }
+
+  function clearDrawVisual(): void {
+    const active = draw;
+    draw = null;
+    if (!active) return;
+    active.preview?.remove();
+    if (
+      typeof board.hasPointerCapture === "function" &&
+      board.hasPointerCapture(active.pointerId)
+    ) {
+      board.releasePointerCapture(active.pointerId);
+    }
+  }
+
+  function updateDrawPreview(current: Square): void {
+    const active = draw;
+    if (!active) return;
+    const kind = current === active.source ? "circle" : "arrow";
+    const shape: Annotation =
+      kind === "circle"
+        ? {
+            id: "pw-preview",
+            kind: "circle",
+            square: active.source,
+            layer: "preview",
+          }
+        : {
+            id: "pw-preview",
+            kind: "arrow",
+            from: active.source,
+            to: current,
+            layer: "preview",
+          };
+    if (active.previewKind !== kind || active.preview === null) {
+      active.preview?.remove();
+      const node = createAnnotationNode(shape);
+      node.classList.add("pw-annotation-preview");
+      annotationLayer.append(node);
+      active.preview = node;
+      active.previewKind = kind;
+    }
+    paintAnnotation(active.preview, shape);
+  }
+
   function applyDragOffset(): void {
     const active = drag;
     if (!active) return;
     active.frame = null;
-    const { piece, rect, source } = active;
+    const { piece, rect } = active;
     if (!piece || !rect || rect.width <= 0 || rect.height <= 0) return;
-    // Compute visual column/row of the source square under the current
-    // orientation. The piece is then translated by the delta between
-    // its current grid origin and the pointer position, so the piece
-    // grabs under the pointer.
-    const fileIndex = files.indexOf(source[0] as File);
-    const rankIndex = Number(source[1]) - 1;
-    const visualCol = orientation === "white" ? fileIndex : 7 - fileIndex;
-    const visualRow = orientation === "white" ? 7 - rankIndex : rankIndex;
-    const cellW = rect.width / 8;
-    const cellH = rect.height / 8;
-    const offsetX = active.clientX - rect.left - visualCol * cellW;
-    const offsetY = active.clientY - rect.top - visualRow * cellH;
+    // Subtract the press-time grab offset so the piece tracks the pointer
+    // from the exact point it was grabbed instead of jumping under it.
+    const offsetX = active.clientX - rect.left - active.grabX;
+    const offsetY = active.clientY - rect.top - active.grabY;
     piece.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
   }
 
@@ -489,13 +563,32 @@ export function createChessboard(
     const piece = nodes.get(active.source);
     if (!piece) return;
     active.piece = piece;
-    active.rect = board.getBoundingClientRect();
     piece.classList.add("pw-piece-dragging");
     piece.dataset.dragging = "true";
     piece.style.transition = "none";
   }
   function pointerDown(event: PointerEvent): void {
-    if (event.button !== 0) return;
+    if (event.button === 2) {
+      // Right-button gesture: circle on release over the source square,
+      // arrow when dragged to a different square. Any square qualifies;
+      // annotation legality is not the renderer's concern.
+      if (!event.isPrimary || !interaction || draw || drag) return;
+      const target = pointerTarget(event);
+      if (!target) return;
+      draw = {
+        source: target,
+        pointerId: event.pointerId,
+        rect: board.getBoundingClientRect(),
+        preview: null,
+        previewKind: null,
+      };
+      if (!board.hasPointerCapture(event.pointerId)) {
+        board.setPointerCapture(event.pointerId);
+      }
+      updateDrawPreview(target);
+      return;
+    }
+    if (event.button !== 0 || draw) return;
     if (!event.isPrimary) return;
     if (!interaction) return;
     const target = pointerTarget(event);
@@ -505,17 +598,26 @@ export function createChessboard(
     // become a drag on the first `pointermove`. We defer drag commitment so
     // a stationary click still emits the slice-01 click events from the
     // same handler. The pointer capture is shared by both paths.
-    drag = destinations.has(target)
-      ? {
-          source: target,
-          pointerId: event.pointerId,
-          piece: null,
-          rect: null,
-          clientX: 0,
-          clientY: 0,
-          frame: null,
-        }
-      : null;
+    if (destinations.has(target)) {
+      const rect = board.getBoundingClientRect();
+      const fileIndex = files.indexOf(target[0] as File);
+      const rankIndex = Number(target[1]) - 1;
+      const col = orientation === "white" ? fileIndex : 7 - fileIndex;
+      const row = orientation === "white" ? 7 - rankIndex : rankIndex;
+      drag = {
+        source: target,
+        pointerId: event.pointerId,
+        piece: null,
+        rect,
+        grabX: event.clientX - rect.left - (col * rect.width) / 8,
+        grabY: event.clientY - rect.top - (row * rect.height) / 8,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        frame: null,
+      };
+    } else {
+      drag = null;
+    }
 
     const dests = destinations;
     const inSelectedDests = selected
@@ -523,6 +625,8 @@ export function createChessboard(
       : false;
 
     if (selected && inSelectedDests && selected !== target) {
+      // The click resolves this gesture; it must not promote to a drag.
+      drag = null;
       interaction.onEvent({
         type: "move",
         from: selected,
@@ -532,6 +636,7 @@ export function createChessboard(
       return;
     }
     if (selected === target) {
+      drag = null;
       interaction.onEvent({ type: "clear", origin: "pointer" });
       return;
     }
@@ -548,6 +653,14 @@ export function createChessboard(
 
   function pointerMove(event: PointerEvent): void {
     if (!event.isPrimary) return;
+    const activeDraw = draw;
+    if (activeDraw && activeDraw.pointerId === event.pointerId) {
+      if (interaction !== null) {
+        const target = pointerTarget(event, activeDraw.rect);
+        if (target) updateDrawPreview(target);
+      }
+      return;
+    }
     const active = drag;
     if (
       !active ||
@@ -576,6 +689,26 @@ export function createChessboard(
   }
 
   function pointerUp(event: PointerEvent): void {
+    if (event.button === 2) {
+      const activeDraw = draw;
+      if (activeDraw && activeDraw.pointerId === event.pointerId) {
+        const drop = pointerTarget(event, activeDraw.rect);
+        if (drop && interaction !== null) {
+          interaction.onEvent(
+            drop === activeDraw.source
+              ? { type: "circle", square: drop, origin: "pointer" }
+              : {
+                  type: "arrow",
+                  from: activeDraw.source,
+                  to: drop,
+                  origin: "pointer",
+                },
+          );
+        }
+        clearDrawVisual();
+      }
+      return;
+    }
     if (board.hasPointerCapture(event.pointerId)) {
       board.releasePointerCapture(event.pointerId);
     }
@@ -597,12 +730,13 @@ export function createChessboard(
   }
 
   function pointerCancel(event: PointerEvent): void {
-    if (drag?.pointerId !== event.pointerId) return;
-    clearDragVisual();
+    if (drag?.pointerId === event.pointerId) clearDragVisual();
+    if (draw?.pointerId === event.pointerId) clearDrawVisual();
   }
 
   function lostPointerCapture(event: PointerEvent): void {
     if (drag?.pointerId === event.pointerId) clearDragVisual();
+    if (draw?.pointerId === event.pointerId) clearDrawVisual();
   }
 
   board.addEventListener("pointerdown", pointerDown);
@@ -610,6 +744,7 @@ export function createChessboard(
   board.addEventListener("pointerup", pointerUp);
   board.addEventListener("pointercancel", pointerCancel);
   board.addEventListener("lostpointercapture", lostPointerCapture);
+  board.addEventListener("contextmenu", contextMenu);
 
   renderPosition(position);
   renderVisibleAnnotations(annotations);
@@ -643,9 +778,7 @@ export function createChessboard(
       const nextAnnotations =
         update.annotations === undefined
           ? undefined
-          : deepCloneAnnotationMetadata(
-              validateAnnotations(update.annotations),
-            );
+          : validateAnnotations(update.annotations);
       const hasVisibleLayers = update.visibleLayers !== undefined;
       const nextVisibleLayers = hasVisibleLayers
         ? validateVisibleLayers(update.visibleLayers)
@@ -653,6 +786,7 @@ export function createChessboard(
 
       if (nextOrientation !== undefined) {
         clearDragVisual();
+        clearDrawVisual();
         orientation = nextOrientation;
         for (const [square, node] of nodes) place(node, square, orientation);
         renderMarks();
@@ -669,11 +803,12 @@ export function createChessboard(
       if (nextInteraction !== undefined) {
         if (nextInteraction === null) {
           clearDragVisual();
+          clearDrawVisual();
           interaction = null;
           destinations = new Map();
         } else {
           interaction = nextInteraction;
-          destinations = new Map(interaction.destinations);
+          destinations = interaction.destinations;
           if (drag && !destinations.has(drag.source)) clearDragVisual();
         }
         renderMarks();
@@ -728,11 +863,13 @@ export function createChessboard(
       if (destroyed) return;
       destroyed = true;
       clearDragVisual();
+      clearDrawVisual();
       board.removeEventListener("pointerdown", pointerDown);
       board.removeEventListener("pointermove", pointerMove);
       board.removeEventListener("pointerup", pointerUp);
       board.removeEventListener("pointercancel", pointerCancel);
       board.removeEventListener("lostpointercapture", lostPointerCapture);
+      board.removeEventListener("contextmenu", contextMenu);
       nodes.clear();
       for (const mark of markNodes.values()) mark.remove();
       markNodes.clear();
@@ -963,7 +1100,12 @@ function validateAnnotations(
         layer: annotation.layer,
         ...(annotation.color !== undefined ? { color: annotation.color } : {}),
         ...(annotation.metadata !== undefined
-          ? { metadata: annotation.metadata }
+          ? {
+              metadata: cloneJsonValue(
+                annotation.metadata,
+                `annotations[${index}].metadata`,
+              ),
+            }
           : {}),
       };
     } else if (annotation.kind === "circle") {
@@ -975,7 +1117,12 @@ function validateAnnotations(
         layer: annotation.layer,
         ...(annotation.color !== undefined ? { color: annotation.color } : {}),
         ...(annotation.metadata !== undefined
-          ? { metadata: annotation.metadata }
+          ? {
+              metadata: cloneJsonValue(
+                annotation.metadata,
+                `annotations[${index}].metadata`,
+              ),
+            }
           : {}),
       };
     } else {
@@ -986,49 +1133,6 @@ function validateAnnotations(
     checked.push(copied);
   }
   return Object.freeze(checked);
-}
-
-// Slice 05: rebuild each annotation with a deep copy of its metadata so
-// later external mutation of caller state cannot alter renderer state.
-function deepCloneAnnotationMetadata(
-  annotations: readonly Annotation[],
-): readonly Annotation[] {
-  let mutated = false;
-  const next: Annotation[] = new Array(annotations.length);
-  for (let i = 0; i < annotations.length; i++) {
-    const annotation = annotations[i] as Annotation;
-    if (annotation.metadata === undefined) {
-      next[i] = annotation;
-      continue;
-    }
-    mutated = true;
-    const metadata = cloneJsonValue(annotation.metadata, "annotation.metadata");
-    const rebuilt: Annotation =
-      annotation.kind === "arrow"
-        ? {
-            id: annotation.id,
-            kind: "arrow",
-            from: annotation.from,
-            to: annotation.to,
-            layer: annotation.layer,
-            ...(annotation.color !== undefined
-              ? { color: annotation.color }
-              : {}),
-            metadata,
-          }
-        : {
-            id: annotation.id,
-            kind: "circle",
-            square: annotation.square,
-            layer: annotation.layer,
-            ...(annotation.color !== undefined
-              ? { color: annotation.color }
-              : {}),
-            metadata,
-          };
-    next[i] = rebuilt;
-  }
-  return mutated ? Object.freeze(next) : annotations;
 }
 
 function validateVisibleLayers(

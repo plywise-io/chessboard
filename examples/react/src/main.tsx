@@ -9,7 +9,14 @@ import type {
 } from "@plywise/chessboard";
 import "@plywise/chessboard/style.css";
 import { Chessboard } from "@plywise/chessboard-react";
-import { StrictMode, useCallback, useMemo, useRef, useState } from "react";
+import {
+  StrictMode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
@@ -84,6 +91,8 @@ function legalDestinations(
 function lastEventLabel(event: InteractionEvent): string {
   if (event.type === "select") return `select ${event.square}`;
   if (event.type === "clear") return "clear";
+  if (event.type === "circle") return `circle ${event.square}`;
+  if (event.type === "arrow") return `arrow ${event.from}→${event.to}`;
   return `move ${event.from}→${event.to} (${event.origin})`;
 }
 
@@ -116,6 +125,8 @@ const ANNOTATIONS: readonly Annotation[] = [
   },
 ];
 
+const NO_ANNOTATIONS: readonly Annotation[] = [];
+
 function App() {
   const [position, setPosition] = useState(initialPosition);
   const [orientation, setOrientation] = useState<"white" | "black">("white");
@@ -127,9 +138,11 @@ function App() {
   const [hiddenLayers, setHiddenLayers] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-
+  const [drawn, setDrawn] = useState<readonly Annotation[]>([]);
   const stateRef = useRef({ position });
-  stateRef.current.position = position;
+  useEffect(() => {
+    stateRef.current.position = position;
+  }, [position]);
 
   const destinations = useMemo(() => {
     const map = new Map<Square, readonly Square[]>();
@@ -153,6 +166,30 @@ function App() {
     }
     if (event.type === "clear") {
       setSelected(undefined);
+      return;
+    }
+    if (event.type === "circle" || event.type === "arrow") {
+      // Right-button gesture: toggle the requested shape in caller state.
+      const annotation: Annotation =
+        event.type === "circle"
+          ? {
+              id: `circle:${event.square}`,
+              kind: "circle",
+              square: event.square,
+              layer: "user",
+            }
+          : {
+              id: `arrow:${event.from}-${event.to}`,
+              kind: "arrow",
+              from: event.from,
+              to: event.to,
+              layer: "user",
+            };
+      setDrawn((prev) =>
+        prev.some((existing) => existing.id === annotation.id)
+          ? prev.filter((existing) => existing.id !== annotation.id)
+          : [...prev, annotation],
+      );
       return;
     }
     if (event.type === "move") {
@@ -202,6 +239,8 @@ function App() {
     });
   }, []);
 
+  const mergedAnnotations = useMemo(() => [...ANNOTATIONS, ...drawn], [drawn]);
+
   return (
     <main>
       <h1>Plywise Chessboard</h1>
@@ -212,7 +251,7 @@ function App() {
         animationMs={150}
         interaction={interaction}
         presentation={presentation}
-        annotations={showAnnotations ? ANNOTATIONS : []}
+        annotations={showAnnotations ? mergedAnnotations : NO_ANNOTATIONS}
         {...(visibleLayers === undefined ? {} : { visibleLayers })}
       />
       <div className="controls">

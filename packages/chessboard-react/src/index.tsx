@@ -6,6 +6,7 @@ import type {
   Interaction,
   Position,
   Presentation,
+  Square,
 } from "@plywise/chessboard";
 import { createChessboard } from "@plywise/chessboard";
 import type { ComponentPropsWithoutRef } from "react";
@@ -45,6 +46,41 @@ export interface ChessboardProps
   readonly presentation?: Presentation;
   readonly annotations?: readonly Annotation[];
   readonly visibleLayers?: ReadonlySet<string>;
+}
+
+// Detect a single-piece move between two positions (a capture keeps the
+// destination square occupied) so the adapter can forward it to the
+// renderer's `move` instead of a full position replacement.
+function detectMove(
+  previous: Position,
+  next: Position,
+): { from: Square; to: Square } | undefined {
+  const removed: Square[] = [];
+  const arrived: Square[] = [];
+  for (const [square, piece] of previous) {
+    const after = next.get(square);
+    if (after === undefined) removed.push(square);
+    else if (after.color !== piece.color || after.role !== piece.role)
+      arrived.push(square);
+  }
+  for (const square of next.keys()) {
+    if (!previous.has(square)) arrived.push(square);
+  }
+  if (removed.length !== 1 || arrived.length !== 1) return undefined;
+  const from = removed[0];
+  const to = arrived[0];
+  if (!from || !to) return undefined;
+  const mover = previous.get(from);
+  const landed = next.get(to);
+  if (
+    !mover ||
+    !landed ||
+    mover.color !== landed.color ||
+    mover.role !== landed.role
+  ) {
+    return undefined;
+  }
+  return { from, to };
 }
 
 export function Chessboard({
@@ -121,8 +157,16 @@ export function Chessboard({
     };
     if (!changed) return;
 
+    // A single-piece position change routes through the renderer's `move`
+    // so the moving piece keeps its DOM node and transform transition.
+    const approved =
+      prior.position === position
+        ? undefined
+        : detectMove(prior.position, position);
+    if (approved) instance.current?.move(approved.from, approved.to);
+
     const update: ChessboardUpdate = {
-      ...(prior.position === position ? {} : { position }),
+      ...(approved || prior.position === position ? {} : { position }),
       ...(prior.orientation === orientation ? {} : { orientation }),
       ...(prior.boardLabel === boardLabel ? {} : { ariaLabel: boardLabel }),
       ...(prior.animationMs === animationMs ? {} : { animationMs }),

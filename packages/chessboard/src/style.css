@@ -15,10 +15,10 @@
   background:
     conic-gradient(
       from 90deg,
-      var(--pw-dark-square) 25%,
-      var(--pw-light-square) 0 50%,
-      var(--pw-dark-square) 0 75%,
-      var(--pw-light-square) 0
+      var(--pw-light-square) 25%,
+      var(--pw-dark-square) 0 50%,
+      var(--pw-light-square) 0 75%,
+      var(--pw-dark-square) 0
     )
     0 0 / 25% 25%;
   user-select: none;
@@ -122,6 +122,12 @@
   stroke: var(--pw-annotation-color);
   stroke-width: 0.12;
   fill: none;
+}
+
+/* Transient shape shown while a right-button annotation gesture is in
+ * progress; removed on release, never part of controlled state. */
+.pw-annotations .pw-annotation-preview {
+  opacity: 0.5;
 }
 
 /* Drag visual: lifted piece sits above siblings and ignores pointer

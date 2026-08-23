@@ -7,5 +7,6 @@ skills-lock.json
 .agents/skills/
 .scratch/
 docs/agents/
+.omp/
 .idea/
 *.tsbuildinfo

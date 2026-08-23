@@ -33,6 +33,8 @@ export const Default = {
     position: positionFromFen(START_FEN),
     orientation: "white",
     ariaLabel: "Starting position",
+    pieceSetName: "chessnut",
+    themeName: "blue"
   },
   render: (args) => (
     <div style={{ width: "24rem" }}>

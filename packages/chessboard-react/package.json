@@ -1,6 +1,6 @@
 {
   "name": "@plywise/chessboard-react",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "React adapter for @plywise/chessboard.",
   "keywords": [
     "chess",
@@ -35,7 +35,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@plywise/chessboard": "^0.2.0"
+    "@plywise/chessboard": "^0.3.0"
   },
   "peerDependencies": {
     "react": ">=18 <21"

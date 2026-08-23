@@ -166,6 +166,8 @@ export interface ChessboardConfig {
   readonly orientation?: Color;
   readonly ariaLabel?: string;
   readonly animationMs?: number;
+  /** Edge coordinates (files a–h, ranks 1–8), orientation-aware. */
+  readonly coordinates?: boolean;
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
   /**
@@ -193,6 +195,7 @@ export interface ChessboardUpdate {
   readonly orientation?: Color;
   readonly ariaLabel?: string;
   readonly animationMs?: number;
+  readonly coordinates?: boolean;
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
   /**
@@ -306,8 +309,18 @@ function squareToCoord(
 
 function place(node: HTMLElement, square: Square, orientation: Color): void {
   const { x, y } = squareToCoord(square, orientation);
+  placeCoord(node, x, y);
+}
+
+function placeCoord(node: HTMLElement, x: number, y: number): void {
   node.style.setProperty("--pw-file", String(x));
   node.style.setProperty("--pw-rank", String(y));
+}
+
+// Visual cell (x, y) sits on a light square when x + y is even, matching
+// the stylesheet's fixed checkerboard.
+function coordParity(x: number, y: number): "light" | "dark" {
+  return (x + y) % 2 === 0 ? "light" : "dark";
 }
 
 export function createChessboard(
@@ -343,6 +356,10 @@ export function createChessboard(
     config.pieceSet,
   );
   let theme: BoardTheme | undefined = validateTheme(config.theme);
+  let coordinates =
+    config.coordinates === undefined
+      ? false
+      : validateBoolean(config.coordinates, "coordinates");
   let destroyed = false;
   // A pointerdown starts a candidate; the first move fills in the visual
   // fields and commits it as a drag.
@@ -350,6 +367,11 @@ export function createChessboard(
     readonly source: Square;
     readonly pointerId: number;
     piece: HTMLDivElement | null;
+    // Translucent stand-in left on the origin square during the drag.
+    ghost: HTMLDivElement | null;
+    // Highlight of the legal destination currently under the pointer.
+    destMark: HTMLDivElement | null;
+    destSquare: Square | null;
     // Grab offset in cell units, captured at press time, so the piece
     // keeps the grabbed point under the pointer while dragging.
     readonly grabXFrac: number;
@@ -390,6 +412,10 @@ export function createChessboard(
   annotationLayer.setAttribute("aria-hidden", "true");
   annotationLayer.setAttribute("pointer-events", "none");
   annotationLayer.style.pointerEvents = "none";
+  const coordinateLayer = host.ownerDocument.createElement("div");
+  coordinateLayer.className = "pw-coordinates";
+  coordinateLayer.setAttribute("aria-hidden", "true");
+  coordinateLayer.style.pointerEvents = "none";
   board.className = "pw-board";
   board.setAttribute("role", "img");
   board.setAttribute("aria-label", config.ariaLabel ?? "Chessboard");
@@ -433,7 +459,7 @@ export function createChessboard(
 
   applyTheme(theme);
 
-  board.append(annotationLayer);
+  board.append(annotationLayer, coordinateLayer);
   host.append(board);
 
   function paintPiece(
@@ -546,29 +572,48 @@ export function createChessboard(
     renderAnnotations(filtered);
   }
 
+  // Reconcile by piece identity (color + role) so a piece that changed
+  // squares keeps its DOM node and the stylesheet transition animates the
+  // move — the same guarantee `move()` gives the caller-approved path.
+  // A node whose piece stays on its square is untouched; unmatched nodes
+  // relocate to a square needing the same piece type; the rest go away.
   function renderPosition(next: Position): void {
     const checked = validatePosition(next);
-
+    const nextNodes = new Map<Square, HTMLDivElement>();
+    const pool = new Map<string, HTMLDivElement[]>();
     for (const [square, node] of nodes) {
       const piece = checked.get(square);
-      if (!piece) {
-        node.remove();
-        nodes.delete(square);
+      if (
+        piece &&
+        node.dataset.color === piece.color &&
+        node.dataset.role === piece.role
+      ) {
+        nextNodes.set(square, node);
       } else {
-        paintPiece(node, square, piece);
+        const pieceKey = `${node.dataset.color}${node.dataset.role}`;
+        const bucket = pool.get(pieceKey);
+        if (bucket === undefined) pool.set(pieceKey, [node]);
+        else bucket.push(node);
       }
     }
-
     for (const [square, piece] of checked) {
-      if (nodes.has(square)) continue;
-      const node = host.ownerDocument.createElement("div");
-      node.className = "pw-piece";
-      node.setAttribute("aria-hidden", "true");
+      if (nextNodes.has(square)) continue;
+      const pieceKey = `${piece.color}${piece.role}`;
+      let node = pool.get(pieceKey)?.pop();
+      if (node === undefined) {
+        node = host.ownerDocument.createElement("div");
+        node.className = "pw-piece";
+        node.setAttribute("aria-hidden", "true");
+        board.append(node);
+      }
       paintPiece(node, square, piece);
-      nodes.set(square, node);
-      board.append(node);
+      nextNodes.set(square, node);
     }
-
+    for (const bucket of pool.values()) {
+      for (const leftover of bucket) leftover.remove();
+    }
+    nodes.clear();
+    for (const [square, node] of nextNodes) nodes.set(square, node);
     position = checked;
     renderMarks();
   }
@@ -613,6 +658,37 @@ export function createChessboard(
     }
   }
 
+  // Edge coordinates: one label per file on the bottom edge row and one
+  // per rank on the left edge column, placed through the same
+  // --pw-file/--pw-rank transform as pieces so they follow the
+  // orientation. Each label carries the parity of the square it sits on
+  // so the stylesheet can contrast it against the checkerboard.
+  function renderCoordinates(): void {
+    const doc = host.ownerDocument;
+    coordinateLayer.replaceChildren();
+    if (!coordinates) return;
+    for (const file of files) {
+      const label = doc.createElement("span");
+      label.className = "pw-coordinate pw-coordinate-file";
+      label.dataset.file = file;
+      label.textContent = file;
+      const x = squareToCoord(`${file}1` as Square, orientation).x;
+      label.dataset.parity = coordParity(x, 7);
+      placeCoord(label, x, 7);
+      coordinateLayer.append(label);
+    }
+    for (let rank = 1; rank <= 8; rank += 1) {
+      const label = doc.createElement("span");
+      label.className = "pw-coordinate pw-coordinate-rank";
+      label.dataset.rank = String(rank);
+      label.textContent = String(rank);
+      const y = squareToCoord(`a${rank}` as Square, orientation).y;
+      label.dataset.parity = coordParity(0, y);
+      placeCoord(label, 0, y);
+      coordinateLayer.append(label);
+    }
+  }
+
   function squareAt(
     clientX: number,
     clientY: number,
@@ -647,6 +723,8 @@ export function createChessboard(
       if (view) view.cancelAnimationFrame(active.frame);
       else cancelAnimationFrame(active.frame);
     }
+    active.ghost?.remove();
+    active.destMark?.remove();
     if (active.piece) {
       active.piece.style.removeProperty("transform");
       active.piece.style.removeProperty("transition");
@@ -728,6 +806,8 @@ export function createChessboard(
     const active = drag;
     if (!active) return;
     active.frame = null;
+    const rect = board.getBoundingClientRect();
+    updateDragTarget(active, squareAt(active.clientX, active.clientY, rect));
     const { piece } = active;
     if (!piece) return;
     // Live rect per frame so a host resize mid-drag keeps the piece under
@@ -735,7 +815,6 @@ export function createChessboard(
     // inline transform replaces the stylesheet transform, so it is an
     // absolute board-relative position: pointer minus the press-time grab
     // offset expressed in cell units.
-    const rect = board.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     const offsetX =
       active.clientX - rect.left - active.grabXFrac * (rect.width / 8);
@@ -744,10 +823,51 @@ export function createChessboard(
     piece.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
   }
 
+  // Highlight the legal destination currently under the pointer, using the
+  // destination/capture colors; hidden whenever the pointer is not over a
+  // destination of the dragged piece. Runs once per animation frame from
+  // applyDragOffset, never from raw pointermove.
+  function updateDragTarget(active: DragState, square: Square | null): void {
+    const allowed = destinations.get(active.source) ?? [];
+    const target =
+      square !== null && square !== active.source && allowed.includes(square)
+        ? square
+        : null;
+    if (target === null) {
+      active.destMark?.remove();
+      active.destMark = null;
+      active.destSquare = null;
+      return;
+    }
+    if (active.destMark === null) {
+      const node = host.ownerDocument.createElement("div");
+      node.className = "pw-mark pw-mark-drag-target";
+      node.setAttribute("aria-hidden", "true");
+      board.append(node);
+      active.destMark = node;
+    }
+    active.destMark.dataset.destination = position.has(target)
+      ? "occupied"
+      : "empty";
+    if (active.destSquare !== target) {
+      active.destMark.dataset.square = target;
+      place(active.destMark, target, orientation);
+      active.destSquare = target;
+    }
+  }
+
   function startDrag(active: DragState): void {
     const piece = nodes.get(active.source);
     if (!piece) return;
     active.piece = piece;
+    // Translucent stand-in keeps the piece visible on its origin square
+    const ghost = piece.cloneNode(true) as HTMLDivElement;
+    // data-square stays unique to real piece nodes so callers and tests
+    // can key on it.
+    delete ghost.dataset.square;
+    ghost.classList.add("pw-piece-ghost");
+    piece.before(ghost);
+    active.ghost = ghost;
     piece.classList.add("pw-piece-dragging");
     piece.dataset.dragging = "true";
     piece.style.transition = "none";
@@ -818,6 +938,9 @@ export function createChessboard(
         source: target,
         pointerId: event.pointerId,
         piece: null,
+        ghost: null,
+        destMark: null,
+        destSquare: null,
         grabXFrac: (event.clientX - rect.left) / (rect.width / 8) - col,
         grabYFrac: (event.clientY - rect.top) / (rect.height / 8) - row,
         clientX: event.clientX,
@@ -981,6 +1104,7 @@ export function createChessboard(
 
   renderPosition(position);
   renderVisibleAnnotations(annotations);
+  renderCoordinates();
 
   return {
     set(update): void {
@@ -994,6 +1118,10 @@ export function createChessboard(
         update.animationMs === undefined
           ? undefined
           : validateAnimation(update.animationMs);
+      const nextCoordinates =
+        update.coordinates === undefined
+          ? undefined
+          : validateBoolean(update.coordinates, "coordinates");
       const nextInteraction =
         update.interaction === undefined
           ? undefined
@@ -1029,6 +1157,7 @@ export function createChessboard(
         orientation = nextOrientation;
         for (const [square, node] of nodes) place(node, square, orientation);
         renderMarks();
+        renderCoordinates();
       }
       if (update.ariaLabel !== undefined) {
         board.setAttribute("aria-label", update.ariaLabel);
@@ -1038,6 +1167,10 @@ export function createChessboard(
           "--pw-animation-duration",
           `${nextAnimation}ms`,
         );
+      }
+      if (nextCoordinates !== undefined) {
+        coordinates = nextCoordinates;
+        renderCoordinates();
       }
       if (hasTheme) {
         theme = nextTheme;
@@ -1094,19 +1227,11 @@ export function createChessboard(
       const node = nodes.get(from);
       if (!piece || !node) throw new Error(`No piece at ${from}`);
 
-      nodes.get(to)?.remove();
-      nodes.delete(to);
-      nodes.delete(from);
-      nodes.set(to, node);
-
       const next = new Map(position);
       next.delete(from);
       next.set(to, piece);
-      position = next;
-
-      if (drag?.piece === node) clearDragVisual();
-      paintPiece(node, to, piece);
-      renderMarks();
+      if (drag?.source === from) clearDragVisual();
+      renderPosition(next);
     },
 
     destroy(): void {
@@ -1225,6 +1350,13 @@ function validateColor(value: string, name: string): Color {
 function validateAnimation(value: number): number {
   if (!Number.isFinite(value) || value < 0) {
     throw new TypeError("animationMs must be a non-negative number");
+  }
+  return value;
+}
+
+function validateBoolean(value: boolean, name: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new TypeError(`${name} must be a boolean`);
   }
   return value;
 }

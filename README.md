@@ -193,6 +193,7 @@ The renderer exposes CSS custom properties on `.pw-board`:
 | `--pw-light-square` | Light square color |
 | `--pw-dark-square` | Dark square color |
 | `--pw-animation-duration` | Transition duration for piece movement |
+| `--pw-coordinate-color` | Coordinate label color (defaults to opposite-square parity contrast) |
 | `--pw-selected-color` | Selected square color |
 | `--pw-destination-color` | Empty destination color |
 | `--pw-capture-color` | Occupied destination color |
@@ -200,7 +201,7 @@ The renderer exposes CSS custom properties on `.pw-board`:
 | `--pw-check-color` | Checked king color |
 | `--pw-annotation-color` | Default arrow and circle color |
 
-Animation duration is non-negative; `0` switches to instant updates. Direct drag positioning is unanimated by design.
+Animation duration is non-negative; `0` switches to instant updates. Position updates reconcile by piece identity, so a moved piece keeps its DOM node and glides; newer updates retarget the running transition. Direct drag positioning is unanimated by design; dropping a piece animates its settle onto the square. Pass `coordinates: true` to render orientation-aware a–h / 1–8 edge labels.
 
 Pieces come from the vendored **Cburnett** default artwork, embedded in the
 bundle as data URIs so rendering never touches a network. Pass a `pieceSet`
@@ -261,7 +262,7 @@ Wikimedia Commons file pages for the vendored set.
 ## Lifecycle
 
 - `createChessboard(host, config)` returns a controller. The renderer validates inputs at the boundary and throws `TypeError` for invalid squares, pieces, colors, orientations, animation durations, interaction inputs, presentation inputs, annotations, layer visibility, and any other public value.
-- `set(update)` forwards controlled changes: position replacement, approved single-piece `move`, orientation flip, `ariaLabel`, `animationMs`, `interaction`, `presentation`, `annotations`, `visibleLayers`, `pieceSet` (`PieceSources` object, base-URL string, or `null`), `theme`. Omitted fields are left unchanged; boards created without `pieceSet` render the vendored default set, `pieceSet: null` restores glyphs, `theme: null` restores stylesheet square colors, and `interaction: null` disables interaction and clears transient pointer state.
+- `set(update)` forwards controlled changes: position replacement, approved single-piece `move`, orientation flip, `ariaLabel`, `animationMs`, `coordinates`, `interaction`, `presentation`, `annotations`, `visibleLayers`, `pieceSet` (`PieceSources` object, base-URL string, or `null`), `theme`. Omitted fields are left unchanged; boards created without `pieceSet` render the vendored default set, `pieceSet: null` restores glyphs, `theme: null` restores stylesheet square colors, and `interaction: null` disables interaction and clears transient pointer state.
 - `move(from, to)` is the caller-approved single-piece move. It preserves the moving DOM node, removes only the captured node, and does not animate if `animationMs` is `0`.
 - `destroy()` is idempotent and safe to call repeatedly. Calls to `set` or `move` after `destroy` throw `Error`. The DOM subtree is removed on destroy.
 
@@ -279,6 +280,7 @@ The renderer exposes the board as one labelled image. `ariaLabel` in the core pa
 - `presentation` (`{ selected?, lastMove?, checked? }`).
 - `annotations` (`Annotation[]`).
 - `visibleLayers` (`ReadonlySet<string> | undefined`; omitted shows all, empty hides all).
+- `coordinates` (`boolean`, default `false`) and the remaining `ChessboardConfig` fields (`orientation`, `boardLabel`, `animationMs`, `pieceSet`, `theme`).
 
 The adapter creates exactly one core renderer instance, forwards every prop change through that instance, keeps the latest `onEvent` available without recreating the board, and destroys the instance on unmount. No React state is used for board DOM, drag coordinates, or transient pointer state; pointer movement never triggers a React render.
 

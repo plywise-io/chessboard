@@ -150,6 +150,7 @@ function App() {
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [showStateMarks, setShowStateMarks] = useState(false);
   const [lastMove, setLastMove] = useState<Presentation["lastMove"]>();
+  const [showCoordinates, setShowCoordinates] = useState(false);
   const [hiddenLayers, setHiddenLayers] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -277,6 +278,7 @@ function App() {
         orientation={orientation}
         boardLabel="Demo chess position"
         animationMs={150}
+        coordinates={showCoordinates}
         interaction={interaction}
         annotations={showAnnotations ? mergedAnnotations : NO_ANNOTATIONS}
         {...(pieceSetProp === undefined ? {} : { pieceSet: pieceSetProp })}
@@ -361,6 +363,14 @@ function App() {
           onClick={() => setShowStateMarks((shown) => !shown)}
         >
           {showStateMarks ? "Hide" : "Show"} last move and check
+        </button>
+        <button
+          type="button"
+          aria-pressed={showCoordinates}
+          data-testid="toggle-coordinates"
+          onClick={() => setShowCoordinates((prev) => !prev)}
+        >
+          {showCoordinates ? "Hide" : "Show"} coordinates
         </button>
         <button
           type="button"

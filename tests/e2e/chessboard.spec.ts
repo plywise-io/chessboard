@@ -444,6 +444,9 @@ test("drag coordinate math follows black orientation", async ({ page }) => {
   await expect(page.getByTestId("orientation")).toHaveText(
     /Orientation: black/,
   );
+  // Playwright's scroll-into-view for the flip button can push the board
+  // top above the viewport; mouse coordinates must stay on-screen.
+  await page.evaluate(() => window.scrollTo(0, 0));
 
   const board = page.locator(".pw-board");
   const box = await board.boundingBox();
@@ -578,4 +581,103 @@ test("right-dragging between squares toggles an arrow annotation", async ({
   await expect(
     page.locator('[data-annotation-id="arrow:e2-e4:#15781B"]'),
   ).toHaveCount(0);
+});
+
+test("animates position updates through the stylesheet transition", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await clickSquare(page, "e2");
+  await clickSquare(page, "e4");
+
+  const piece = page.locator('.pw-piece[data-square="e4"]');
+  await expect(piece).toBeVisible();
+  const cell = await piece.evaluate((node) => {
+    const board = node.closest(".pw-board");
+    return (board?.getBoundingClientRect().width ?? 0) / 8;
+  });
+  // e2 and e4 share a file, so the glide is vertical: m42 travels from
+  // 6 cells to 4 cells over --pw-animation-duration (150ms in the example).
+  const translateY = () =>
+    piece.evaluate(
+      (node) => new DOMMatrix(getComputedStyle(node).transform).m42,
+    );
+  const first = await translateY();
+  await page.waitForTimeout(60);
+  expect(Math.abs((await translateY()) - first)).toBeGreaterThan(1);
+  await expect
+    .poll(async () => Math.round(await translateY()), { timeout: 2000 })
+    .toBe(Math.round(4 * cell));
+});
+
+test("renders edge coordinates that follow orientation and stay click-through", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(page.locator(".pw-coordinate")).toHaveCount(0);
+  await page.getByTestId("toggle-coordinates").click();
+  await expect(page.locator(".pw-coordinate")).toHaveCount(16);
+
+  const labelVars = (kind: "file" | "rank", name: string) =>
+    page
+      .locator(`.pw-coordinate-${kind}[data-${kind}="${name}"]`)
+      .evaluate((node: HTMLElement) => [
+        node.style.getPropertyValue("--pw-file"),
+        node.style.getPropertyValue("--pw-rank"),
+        node.dataset.parity,
+      ]);
+  expect(await labelVars("file", "a")).toEqual(["0", "7", "dark"]);
+  expect(await labelVars("rank", "1")).toEqual(["0", "7", "dark"]);
+
+  await page.getByRole("button", { name: "Flip orientation" }).click();
+  expect(await labelVars("file", "a")).toEqual(["7", "7", "light"]);
+  expect(await labelVars("rank", "8")).toEqual(["0", "7", "dark"]);
+  // Back to white orientation, board fully in view: click straight
+  // through the rank-2 label onto the a2 pawn.
+  await page.getByRole("button", { name: "Flip orientation" }).click();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const board = page.locator(".pw-board");
+  const box = await board.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+  const cell = box.width / 8;
+  await page.mouse.click(box.x + 0.2 * cell, box.y + 6.3 * cell);
+  await expect(page.getByTestId("last-event")).toHaveText(/select a2/);
+
+  await page.getByTestId("toggle-coordinates").click();
+  await expect(page.locator(".pw-coordinate")).toHaveCount(0);
+});
+
+test("dragging shows an origin ghost and a live drop-target highlight", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const box = await page.locator(".pw-board").boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) return;
+  const cell = box.width / 8;
+
+  await page.mouse.move(box.x + 4.5 * cell, box.y + 6.5 * cell); // e2
+  await page.mouse.down();
+  await page.mouse.move(box.x + 4.5 * cell, box.y + 4.5 * cell, {
+    steps: 6,
+  }); // e4
+
+  await expect(page.locator(".pw-piece-ghost")).toHaveCount(1);
+  await expect(page.locator(".pw-piece-ghost")).toHaveAttribute(
+    "data-color",
+    "white",
+  );
+  const target = page.locator(".pw-mark-drag-target");
+  await expect(target).toHaveCount(1);
+  await expect(target).toHaveAttribute("data-square", "e4");
+  await expect(target).toHaveAttribute("data-destination", "empty");
+
+  await page.mouse.up();
+  await expect(page.locator(".pw-piece-ghost")).toHaveCount(0);
+  await expect(page.locator(".pw-mark-drag-target")).toHaveCount(0);
+  await expect(page.locator('.pw-piece[data-square="e4"]')).toBeVisible();
 });

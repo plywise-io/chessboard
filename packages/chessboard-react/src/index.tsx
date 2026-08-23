@@ -51,6 +51,7 @@ export interface ChessboardProps
   readonly orientation?: Color;
   readonly boardLabel?: string;
   readonly animationMs?: number;
+  readonly coordinates?: boolean;
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
   readonly annotations?: readonly Annotation[];
@@ -99,6 +100,7 @@ export function Chessboard({
   orientation = "white",
   boardLabel = "Chessboard",
   animationMs = 150,
+  coordinates = false,
   interaction,
   presentation,
   annotations,
@@ -114,6 +116,7 @@ export function Chessboard({
     orientation,
     boardLabel,
     animationMs,
+    coordinates,
     interaction,
     presentation,
     annotations,
@@ -130,6 +133,7 @@ export function Chessboard({
       orientation: initial.orientation,
       ariaLabel: initial.boardLabel,
       animationMs: initial.animationMs,
+      coordinates: initial.coordinates,
       interaction: initial.interaction ?? null,
       ...(initial.presentation === undefined
         ? {}
@@ -158,6 +162,7 @@ export function Chessboard({
       orientation,
       boardLabel,
       animationMs,
+      coordinates,
       interaction,
       presentation,
       annotations,
@@ -183,6 +188,7 @@ export function Chessboard({
       ...(prior.orientation === orientation ? {} : { orientation }),
       ...(prior.boardLabel === boardLabel ? {} : { ariaLabel: boardLabel }),
       ...(prior.animationMs === animationMs ? {} : { animationMs }),
+      ...(prior.coordinates === coordinates ? {} : { coordinates }),
       ...(prior.interaction === interaction
         ? {}
         : { interaction: interaction ?? null }),
@@ -201,6 +207,7 @@ export function Chessboard({
     if (Object.keys(update).length > 0) instance.current?.set(update);
   }, [
     animationMs,
+    coordinates,
     annotations,
     boardLabel,
     interaction,

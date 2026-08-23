@@ -27,7 +27,7 @@ function clickSquare(host, square, orientation = "white") {
   board.dispatchEvent(event);
 }
 
-function makeBoard(position, { interaction, presentation } = {}) {
+function makeBoard(position, { interaction, presentation, ...config } = {}) {
   const dom = new JSDOM(
     '<!doctype html><html><body><div id="host"></div></body></html>',
     { pretendToBeVisual: true },
@@ -64,6 +64,7 @@ function makeBoard(position, { interaction, presentation } = {}) {
   const board = createChessboard(host, {
     position,
     animationMs: 0,
+    ...config,
     interaction,
     presentation,
   });
@@ -1940,4 +1941,194 @@ test("rejects invalid pieceSet and theme values", () => {
   );
   const board = createChessboard(host, { position });
   assert.throws(() => board.set({ pieceSet: 42 }), TypeError);
+});
+
+// Position reconciliation: node identity across set({position})
+test("set({position}) reuses the DOM node of a piece that moved squares", () => {
+  const { host, board } = makeBoard(
+    new Map([
+      ["e2", { color: "white", role: "pawn" }],
+      ["d2", { color: "white", role: "pawn" }],
+    ]),
+  );
+  const movingNode = host.querySelector('[data-square="e2"]');
+  board.set({
+    position: new Map([
+      ["d2", { color: "white", role: "pawn" }],
+      ["e4", { color: "white", role: "pawn" }],
+    ]),
+  });
+  assert.equal(host.querySelector('[data-square="e4"]'), movingNode);
+  assert.equal(host.querySelectorAll(".pw-piece").length, 2);
+  assert.equal(movingNode.style.getPropertyValue("--pw-file"), "4");
+  assert.equal(movingNode.style.getPropertyValue("--pw-rank"), "4");
+});
+
+test("set({position}) capture keeps the mover's node and removes the captured node", () => {
+  const { host, board } = makeBoard(
+    new Map([
+      ["e2", { color: "white", role: "pawn" }],
+      ["e4", { color: "black", role: "pawn" }],
+    ]),
+  );
+  const mover = host.querySelector('[data-square="e2"]');
+  const captured = host.querySelector('[data-square="e4"]');
+  board.set({ position: new Map([["e4", { color: "white", role: "pawn" }]]) });
+  assert.equal(host.querySelector('[data-square="e4"]'), mover);
+  assert.equal(captured.isConnected, false);
+  assert.equal(host.querySelectorAll(".pw-piece").length, 1);
+});
+
+test("a newer set({position}) retargets the same node without queueing", () => {
+  const { host, board } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+  );
+  const node = host.querySelector('[data-square="e2"]');
+  board.set({ position: new Map([["e3", { color: "white", role: "pawn" }]]) });
+  board.set({ position: new Map([["e5", { color: "white", role: "pawn" }]]) });
+  assert.equal(host.querySelector('[data-square="e5"]'), node);
+  assert.equal(node.style.getPropertyValue("--pw-file"), "4");
+  assert.equal(node.style.getPropertyValue("--pw-rank"), "3");
+  assert.equal(host.querySelectorAll(".pw-piece").length, 1);
+});
+
+// Edge coordinates
+test("coordinates render edge labels that flip with orientation and toggle at runtime", () => {
+  const { host, board } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    { coordinates: true },
+  );
+  const layer = host.querySelector(".pw-coordinates");
+  assert.equal(layer.style.pointerEvents, "none");
+  assert.equal(host.querySelectorAll(".pw-coordinate").length, 16);
+  const fileA = host.querySelector('.pw-coordinate-file[data-file="a"]');
+  const rank1 = host.querySelector('.pw-coordinate-rank[data-rank="1"]');
+  assert.deepEqual(
+    [
+      fileA.style.getPropertyValue("--pw-file"),
+      fileA.style.getPropertyValue("--pw-rank"),
+    ],
+    ["0", "7"],
+  );
+  assert.equal(fileA.dataset.parity, "dark");
+  assert.equal(rank1.dataset.parity, "dark");
+
+  board.set({ orientation: "black" });
+  // Labels are rebuilt on flip; query the fresh nodes.
+  const flippedFileA = host.querySelector('.pw-coordinate-file[data-file="a"]');
+  const flippedRank1 = host.querySelector('.pw-coordinate-rank[data-rank="1"]');
+  assert.deepEqual(
+    [
+      flippedFileA.style.getPropertyValue("--pw-file"),
+      flippedFileA.style.getPropertyValue("--pw-rank"),
+    ],
+    ["7", "7"],
+  );
+  assert.equal(flippedFileA.dataset.parity, "light");
+  assert.deepEqual(
+    [
+      flippedRank1.style.getPropertyValue("--pw-file"),
+      flippedRank1.style.getPropertyValue("--pw-rank"),
+    ],
+    ["0", "0"],
+  );
+
+  board.set({ coordinates: false });
+  assert.equal(host.querySelectorAll(".pw-coordinate").length, 0);
+  assert.throws(() => board.set({ coordinates: "yes" }), TypeError);
+});
+
+test("coordinates default to off", () => {
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+  );
+  assert.equal(host.querySelectorAll(".pw-coordinate").length, 0);
+});
+
+// Drag affordances: origin ghost and live drop-target highlight
+test("dragging shows an origin ghost and a live drop-target highlight", async () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e3", "e4"]]]),
+        onEvent: (e) => events.push(e),
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "e2");
+  dispatchPointer(host, "pointermove", "e3");
+  await flushRaf();
+
+  const piece = host.querySelector('[data-square="e2"]');
+  const ghost = host.querySelector(".pw-piece-ghost");
+  assert.notEqual(ghost, null);
+  assert.notEqual(ghost, piece);
+  assert.equal(ghost.dataset.square, undefined);
+  assert.equal(ghost.dataset.color, "white");
+  assert.equal(ghost.dataset.role, "pawn");
+
+  // Hovering a legal destination highlights it; hovering nothing legal
+  // hides it again.
+  const mark = host.querySelector(".pw-mark-drag-target");
+  assert.equal(mark.dataset.square, "e3");
+  assert.equal(mark.dataset.destination, "empty");
+  dispatchPointer(host, "pointermove", "d3");
+  await flushRaf();
+  assert.equal(host.querySelector(".pw-mark-drag-target"), null);
+  dispatchPointer(host, "pointermove", "e4");
+  await flushRaf();
+  assert.equal(host.querySelector(".pw-mark-drag-target").dataset.square, "e4");
+
+  dispatchPointer(host, "pointerup", "e4");
+  assert.deepEqual(events, [
+    { type: "select", square: "e2", origin: "pointer" },
+    { type: "move", from: "e2", to: "e4", origin: "drag" },
+  ]);
+  assert.equal(host.querySelector(".pw-piece-ghost"), null);
+  assert.equal(host.querySelector(".pw-mark-drag-target"), null);
+  // Without caller approval the piece stays on its origin square.
+  assert.equal(host.querySelector('[data-square="e2"]'), piece);
+});
+
+test("drop-target highlight marks an occupied destination as a capture", async () => {
+  const { host } = makeBoard(
+    new Map([
+      ["e2", { color: "white", role: "pawn" }],
+      ["e4", { color: "black", role: "pawn" }],
+    ]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        onEvent: () => {},
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "e2");
+  dispatchPointer(host, "pointermove", "e4");
+  await flushRaf();
+  const mark = host.querySelector(".pw-mark-drag-target");
+  assert.equal(mark.dataset.square, "e4");
+  assert.equal(mark.dataset.destination, "occupied");
+});
+
+test("pointercancel removes the drag ghost and drop-target highlight", async () => {
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        onEvent: () => {},
+      },
+    },
+  );
+  dispatchPointer(host, "pointerdown", "e2");
+  dispatchPointer(host, "pointermove", "e4");
+  await flushRaf();
+  assert.notEqual(host.querySelector(".pw-piece-ghost"), null);
+  assert.notEqual(host.querySelector(".pw-mark-drag-target"), null);
+  dispatchPointer(host, "pointercancel", "e4");
+  assert.equal(host.querySelector(".pw-piece-ghost"), null);
+  assert.equal(host.querySelector(".pw-mark-drag-target"), null);
 });

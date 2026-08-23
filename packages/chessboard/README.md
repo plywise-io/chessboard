@@ -58,8 +58,8 @@ import type {
 
 ### Configuration and updates
 
-- `ChessboardConfig`: `{ position, orientation?, ariaLabel?, animationMs?, pieceSet?, theme?, interaction?, presentation?, annotations?, visibleLayers? }`.
-- `ChessboardUpdate`: `{ position?, orientation?, ariaLabel?, animationMs?, pieceSet?, theme?, interaction?, presentation?, annotations?, visibleLayers? }`. Every field is optional; omitted fields are left unchanged. `interaction: null` disables interaction and clears transient pointer state.
+- `ChessboardConfig`: `{ position, orientation?, ariaLabel?, animationMs?, coordinates?, pieceSet?, theme?, interaction?, presentation?, annotations?, visibleLayers? }`.
+- `ChessboardUpdate`: `{ position?, orientation?, ariaLabel?, animationMs?, coordinates?, pieceSet?, theme?, interaction?, presentation?, annotations?, visibleLayers? }`. Every field is optional; omitted fields are left unchanged. `interaction: null` disables interaction and clears transient pointer state.
 
 ### Piece sets (`pieceSet`)
 
@@ -87,10 +87,9 @@ interface Interaction {
 - `{ type: "move", from: Square, to: Square, origin: "selection" | "drag" }`
 - `{ type: "circle", square: Square, origin: "pointer", color?: string }`
 - `{ type: "arrow", from: Square, to: Square, origin: "pointer", color?: string }`
-
-A source absent from `destinations` is not selectable. An empty destination collection still identifies a selectable source. A pointer press must travel a few pixels before it becomes a drag; jitter-sized movement inside a click never lifts the piece.
-
 While `interaction` is enabled, right-button gestures report annotation intents instead of moving pieces: pressing and releasing the right button on one square emits a `circle` intent, and right-dragging between two squares emits an `arrow` intent. A translucent snapped preview is shown during the gesture and the native context menu is suppressed. These are requests only — the caller decides whether to add, remove, or ignore the corresponding annotation in its own state. Spectator boards (`interaction: null` or omitted) keep the native context menu and emit nothing.
+
+During a drag the renderer shows two transient affordances: a translucent ghost of the piece stays on its origin square (`.pw-piece-ghost`), and the legal destination under the pointer is highlighted (`.pw-mark-drag-target`, with `data-destination` `empty`/`occupied`, styled by `--pw-destination-color`/`--pw-capture-color`). Both are removed on release; neither is part of controlled state.
 
 #### Modifier-coloured annotation gestures
 
@@ -179,8 +178,8 @@ Stable, read-only `data-*` hooks:
 
 - Pieces: `data-square`, `data-color`, `data-role`.
 - Marks: `data-mark` and `data-square`; mark values are `selected`, `destination`, `last-move-from`, `last-move-to`, or `check`.
-- Destinations: `data-destination` on destination marks, with values `empty` or `occupied`.
-- Annotations: `data-annotation-id`, `data-annotation-kind`, `data-annotation-layer`.
+- Destinations: `data-destination` on destination marks and on the drag hover highlight (`.pw-mark-drag-target`), with values `empty` or `occupied`.
+- Coordinates: `.pw-coordinate-file[data-file]` and `.pw-coordinate-rank[data-rank]` carry `data-parity` (`light`/`dark`) of the square they sit on. The layer never takes pointer events.
 
 These are observability hooks for tests, browser automation, and constrained adapters. They are not a mutation interface.
 
@@ -193,6 +192,7 @@ Override the CSS custom properties on `.pw-board` to theme squares, marks, and a
   --pw-light-square: #f0d9b5;
   --pw-dark-square: #b58863;
   --pw-animation-duration: 150ms;
+  /* --pw-coordinate-color: #6b4226; omit for square-parity contrast */
   --pw-selected-color: rgba(20, 85, 30, 0.45);
   --pw-destination-color: rgba(20, 85, 30, 0.30);
   --pw-capture-color: rgba(150, 30, 30, 0.40);
@@ -202,7 +202,9 @@ Override the CSS custom properties on `.pw-board` to theme squares, marks, and a
 }
 ```
 
-`animationMs: 0` switches to instant updates. A newer approved move or position update retargets the active transition; transitions are not queued.
+`coordinates: true` renders a–h / 1–8 edge labels that follow the orientation; `coordinates: false` (the default) renders none. Labels default to the opposite square colour for contrast; set `--pw-coordinate-color` to override both parities.
+
+`animationMs: 0` switches to instant updates. A newer approved move or position update retargets the active transition; transitions are not queued. Position updates reconcile by piece identity, so a piece that changed squares keeps its DOM node and glides; a captured piece disappears when the mover arrives.
 
 ## Accessibility
 

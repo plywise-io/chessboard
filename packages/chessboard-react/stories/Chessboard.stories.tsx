@@ -2,16 +2,27 @@ import type { Annotation, InteractionEvent, Square } from "@plywise/chessboard";
 import {
   boardThemes,
   Chessboard,
+  type ChessboardProps,
   type PieceSetName,
   pieceSets,
 } from "@plywise/chessboard-react";
+import type { Meta } from "@storybook/react-vite";
 import { useMemo, useState } from "react";
 import {
   ANNOTATION_EXAMPLES,
   demoDestinations,
   positionFromFen,
   START_FEN,
-} from "./helpers";
+} from "./helpers.js";
+
+type StoryArgs = ChessboardProps & {
+  readonly themeName: keyof typeof boardThemes;
+  readonly pieceSetName: PieceSetName | "glyphs";
+};
+type DefaultStoryArgs = StoryArgs &
+  Required<Pick<ChessboardProps, "orientation">>;
+type PlaygroundArgs = Omit<StoryArgs, "position"> &
+  Required<Pick<ChessboardProps, "orientation">>;
 
 export default {
   title: "Chessboard",
@@ -25,18 +36,18 @@ export default {
       options: [...Object.keys(pieceSets), "glyphs"],
     },
   },
-} satisfies Meta;
+} satisfies Meta<StoryArgs>;
 
 /** A spectator board: no `interaction` means pointer-inert rendering. */
 export const Default = {
   args: {
     position: positionFromFen(START_FEN),
     orientation: "white",
-    ariaLabel: "Starting position",
+    boardLabel: "Starting position",
     pieceSetName: "chessnut",
     themeName: "blue",
   },
-  render: ({ pieceSetName, themeName, ...args }) => (
+  render: ({ pieceSetName, themeName, ...args }: DefaultStoryArgs) => (
     <div style={{ width: "24rem" }}>
       <Chessboard
         {...args}
@@ -97,7 +108,7 @@ export const PresentationMarks = {
     ),
     presentation: { lastMove: { from: "f1", to: "c4" }, checked: "e8" },
   },
-  render: (args) => (
+  render: (args: ChessboardProps) => (
     <div style={{ width: "24rem" }}>
       <Chessboard {...args} />
     </div>
@@ -204,7 +215,7 @@ export const Playground = {
     themeName: Object.keys(boardThemes)[0],
     pieceSetName: Object.keys(pieceSets)[0],
   },
-  render: ({ orientation, themeName, pieceSetName }) => (
+  render: ({ orientation, themeName, pieceSetName }: PlaygroundArgs) => (
     <div style={{ width: "24rem" }}>
       <Chessboard
         position={positionFromFen(START_FEN)}

@@ -11,7 +11,7 @@ const ROLE_BY_LETTER = {
 
 /** Demo helper: consumers own FEN parsing and position building. */
 export function positionFromFen(fen: string): Position {
-  const [placement] = fen.split(" ");
+  const [placement = ""] = fen.split(" ");
   const position = new Map<
     Square,
     { color: "white" | "black"; role: string }
@@ -77,7 +77,7 @@ export function demoDestinations(
 ): ReadonlyMap<Square, readonly Square[]> {
   const result = new Map<Square, readonly Square[]>();
   for (const [square, piece] of position) {
-    const fileIndex = "abcdefgh".indexOf(square[0]);
+    const fileIndex = "abcdefgh".indexOf(square[0] ?? "");
     const rank = Number(square[1]);
     if (piece.role === "pawn") {
       const direction = piece.color === "white" ? 1 : -1;

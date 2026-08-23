@@ -34,7 +34,7 @@ export function Board({ position, destinations, lastMove }) {
 - `orientation?: Color` — `"white" | "black"`.
 - `boardLabel?: string` — accessible label. Defaults to `"Chessboard"`.
 - `animationMs?: number` — non-negative. `0` switches to instant updates.
-- `interaction?: Interaction | null` — controlled destinations and event callback. Omitted or `null` disables interaction and clears transient pointer state.
+- `interaction?: Interaction | null` — controlled destinations and event callback. Omitted or `null` disables interaction and clears transient pointer state. The optional `annotationGestures` list maps right-button modifier combinations to CSS colour strings.
 - `presentation?: Presentation` — `{ selected?, lastMove?, checked? }`; omission clears presentation.
 - `annotations?: readonly Annotation[]` — keyed arrow and circle collection; omission clears annotations.
 - `visibleLayers?: ReadonlySet<string>` — omitted shows every layer; empty hides every annotation.
@@ -44,7 +44,9 @@ export function Board({ position, destinations, lastMove }) {
 
 ```ts
 import type {
-  Annotation, ArrowAnnotation, CircleAnnotation, JsonValue,
+  Annotation, ArrowAnnotation, CircleAnnotation,
+  AnnotationGesture, AnnotationModifier,
+  JsonValue,
   Color, File, LastMove, Piece, Position, Presentation, Rank, Role,
   Square, Destinations, Interaction, InteractionEvent,
   ChessboardConfig, ChessboardUpdate,
@@ -80,12 +82,12 @@ function Game() {
 }
 ```
 
-The adapter passes `onEvent` through directly to the core renderer. The core renderer always invokes the most recent callback without recreating the board. Right-button `circle`/`arrow` intents arrive through the same callback; the board suppresses the native context menu while `interaction` is enabled. A `position` prop whose diff is exactly one piece move (identical color and role) is forwarded through the renderer's approved-move operation so the moving piece keeps its DOM node and transform transition; promotions, castling, and multi-piece diffs fall back to full position replacement.
+The adapter passes `onEvent` through directly to the core renderer. The core renderer always invokes the most recent callback without recreating the board. Right-button `circle`/`arrow` intents arrive through the same callback; the board suppresses the native context menu while `interaction` is enabled. Right-button gestures accept an optional `interaction.annotationGestures` list that maps modifier combinations to CSS colour strings: the adapter forwards it untouched, the renderer colours both the snapped preview and the emitted `circle`/`arrow` event when a binding matches, snapshots the colour on `pointerdown`, and falls back to the stylesheet default for unmatched combinations. Annotation `id`, `layer`, `metadata`, persistence, and toggle semantics stay with the caller. A `position` prop whose diff is exactly one piece move (identical color and role) is forwarded through the renderer's approved-move operation so the moving piece keeps its DOM node and transform transition; promotions, castling, and multi-piece diffs fall back to full position replacement.
 
 ## Accessibility and theming
 
 - The host `<div>` carries `role="img"` and `aria-label` derived from `boardLabel`.
-- Default piece glyphs are decorative.
+- Omitting `pieceSet` renders the vendored Cburnett default artwork (BSD-3-Clause, see `assets/cburnett/LICENSE.md`); pieces are decorative.
 - Keyboard interaction is not implemented by the adapter or the core renderer; an accessible interactive board must be built above them.
 - Override the documented CSS custom properties (`--pw-light-square`, `--pw-selected-color`, ...) on `.pw-board` for theming.
 

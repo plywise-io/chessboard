@@ -18,6 +18,13 @@
       "preset": "recommended"
     }
   },
+  "overrides": [
+    {
+      "includes": ["packages/chessboard/assets/**"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "double"

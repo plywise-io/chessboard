@@ -146,6 +146,35 @@ board.set({
 - Omitting `visibleLayers` shows every layer; an empty set hides every annotation. Core updates accept `null` to reset visibility to every layer.
 - The renderer reconciles annotations by `id`. Adding, changing, hiding, or removing one annotation preserves unaffected nodes; orientation changes recompute geometry without recreating annotation nodes.
 
+## Modifier-coloured annotation gestures
+
+Right-button gestures may carry optional, caller-configured modifier bindings. Each binding in `interaction.annotationGestures` resolves a pressed modifier combination to a CSS colour string used for both the snapped preview and the emitted event:
+
+```ts
+interface Interaction {
+  readonly destinations: ReadonlyMap<Square, readonly Square[]>;
+  readonly onEvent: (event: InteractionEvent) => void;
+  readonly annotationGestures?: readonly AnnotationGesture[];
+}
+
+type AnnotationModifier = "alt" | "ctrl" | "meta" | "shift";
+
+interface AnnotationGesture {
+  readonly modifiers?: readonly AnnotationModifier[];
+  readonly color?: string;
+}
+```
+
+- `color` is a CSS colour string. The renderer applies it through the existing annotation `color` path; there is no bundled palette, enum, or extra dependency.
+- `meta` matches Command on macOS keyboards (the same key that surfaces as `Meta` in `PointerEvent` and `KeyboardEvent`).
+- Bindings use exact sets. `modifiers: ["shift"]` matches only a right-button gesture whose pressed modifiers are exactly shift; it does not match `ctrl`+`shift`. `modifiers` omitted or empty means "no modifiers pressed" (the unmodified right-button gesture).
+- Supported modifier names are exactly `"alt"`, `"ctrl"`, `"meta"`, and `"shift"`. Each binding's `modifiers` list must not repeat a name.
+- The colour is snapshotted on `pointerdown`. The preview and the emitted `circle`/`arrow` event retain it even if the modifier state changes before `pointerup`.
+- Right-button gestures remain enabled whenever `interaction` is set. A modifier combination without a matching binding still emits the existing `circle`/`arrow` intent using the stylesheet-default preview colour (`--pw-annotation-color`).
+- The renderer never owns annotation state: the binding only chooses a colour. Annotation `id`, `layer`, `metadata`, persistence, and toggle semantics stay with the caller.
+
+`CircleEvent` and `ArrowEvent` gain an optional `color?: string`. The property is included at runtime only when a configured binding resolves to a colour; events for unmodified gestures and bindings without a `color` retain their original shape with no extra field.
+
 ## Semantic attributes
 
 Every observable state has a stable, read-only `data-*` attribute for tests, browser automation, and constrained adapters. They are observability hooks, not a mutation interface.
@@ -175,7 +204,10 @@ Animation duration is non-negative; `0` switches to instant updates. Direct drag
 
 ## Piece sets and board themes
 
-Pieces default to Unicode glyphs. Pass a `pieceSet` base URL (config, `set`, or React prop) to render any directory of `{w|b}{P,N,B,R,Q,K}.svg` files as images; `null` restores glyphs:
+Pieces default to the vendored **Cburnett** set (the standard Wikimedia Commons SVG
+chess pieces), embedded in the bundle as data URIs so the default rendering needs no
+network. Pass a `pieceSet` base URL (config, `set`, or React prop) to render any
+directory of `{w|b}{P,N,B,R,Q,K}.svg` files instead; `null` restores Unicode glyphs:
 
 ```ts
 import { createChessboard, pieceSets } from "@plywise/chessboard";
@@ -183,11 +215,14 @@ import { createChessboard, pieceSets } from "@plywise/chessboard";
 createChessboard(host, { position, pieceSet: pieceSets.firi });
 ```
 
-Curated sets carry permissive licenses only (served via jsDelivr, or self-host the files and pass your own base URL). firi is the recommended default — modern gradient on chess.com-class silhouettes; rhosgfx is the leanest flat public-domain fallback:
+Curated remote sets carry permissive licenses only (served via jsDelivr, or self-host
+the files and pass your own base URL). firi is the strongest modern look; rhosgfx is
+the leanest flat public-domain fallback:
 
 | Set | License | Look |
 | --- | --- | --- |
-| `pieceSets.firi` | CC BY 4.0 (attribution) | Modern gradient, chess.com-class silhouettes (default) |
+| `pieceSets.firi` | CC BY 4.0 (attribution) | Modern gradient, chess.com-class silhouettes |
+
 | `pieceSets.rhosgfx` | CC0-1.0 | Flat clean, no attribution required |
 | `pieceSets.kiwenSuwi` | CC BY 4.0 (attribution) | Hand-drawn minimal set |
 | `pieceSets.chessnut` | Apache-2.0 | Flat modern set, pinned upstream commit |
@@ -197,12 +232,21 @@ Curated sets carry permissive licenses only (served via jsDelivr, or self-host t
 
 Square colors come from the `theme` option (`{ light?, dark? }`) or the `--pw-light-square`/`--pw-dark-square` variables. `boardThemes` ships five palettes: `brown` (lichess default), `blue` (chess.com default), `green` (lichess green theme), `walnut` (FIDE-style tournament buff/walnut), and `slate` (minimalist monochrome). `theme: null` restores the stylesheet defaults. Mark and annotation colors stay CSS-variable driven.
 
-Licensing note: the curated catalog is copyleft-free on purpose. rhosgfx is CC0; firi and kiwen-suwi are CC BY 4.0 (you must keep their attribution in your app's credits/docs — see the NOTICE in `packages/chessboard/src/index.ts`); chessnut is Apache-2.0 (retain upstream NOTICE when distributing the artwork); fantasy, spatial, and celtic are MIT artwork by Maurizio Monge. Omitting `pieceSet` renders Unicode glyphs and involves no asset license. Licenses were verified against lila's `COPYING.md` and each upstream `LICENSE`.
+Licensing note: the default set is Cburnett artwork by Colin M.L. Burnett, vendored
+under its BSD-3-Clause option — retain the notice in
+`packages/chessboard/assets/cburnett/LICENSE.md` when distributing this package or its
+artifacts. The curated remote catalog is copyleft-free on purpose: rhosgfx is CC0; firi
+and kiwen-suwi are CC BY 4.0 (you must keep their attribution in your app's credits/docs
+— see the NOTICE in `packages/chessboard/src/index.ts`); chessnut is Apache-2.0 (retain
+upstream NOTICE when distributing the artwork); fantasy, spatial, and celtic are MIT
+artwork by Maurizio Monge. `pieceSet: null` renders Unicode glyphs and involves no
+asset license. Licenses were verified against lila's `COPYING.md`, each upstream
+`LICENSE`, and the Wikimedia Commons file pages for the vendored set.
 
 ## Lifecycle
 
 - `createChessboard(host, config)` returns a controller. The renderer validates inputs at the boundary and throws `TypeError` for invalid squares, pieces, colors, orientations, animation durations, interaction inputs, presentation inputs, annotations, layer visibility, and any other public value.
-- `set(update)` forwards controlled changes: position replacement, approved single-piece `move`, orientation flip, `ariaLabel`, `animationMs`, `interaction`, `presentation`, `annotations`, `visibleLayers`, `pieceSet`, `theme`. Omitted fields are left unchanged; `pieceSet: null` restores glyphs, `theme: null` restores stylesheet square colors, and `interaction: null` disables interaction and clears transient pointer state.
+- `set(update)` forwards controlled changes: position replacement, approved single-piece `move`, orientation flip, `ariaLabel`, `animationMs`, `interaction`, `presentation`, `annotations`, `visibleLayers`, `pieceSet`, `theme`. Omitted fields are left unchanged; boards created without `pieceSet` render the vendored default set, `pieceSet: null` restores glyphs, `theme: null` restores stylesheet square colors, and `interaction: null` disables interaction and clears transient pointer state.
 - `move(from, to)` is the caller-approved single-piece move. It preserves the moving DOM node, removes only the captured node, and does not animate if `animationMs` is `0`.
 - `destroy()` is idempotent and safe to call repeatedly. Calls to `set` or `move` after `destroy` throw `Error`. The DOM subtree is removed on destroy.
 
@@ -210,21 +254,20 @@ Caller collections are copied at the seam. External mutation of `Position`, `des
 
 ## Accessibility
 
-The renderer exposes the board as one labelled image. `ariaLabel` in the core package and `boardLabel` in React customize that label; default piece glyphs and annotation shapes are decorative and hidden from assistive technology. The package does not implement keyboard interaction, roving square focus, screen-reader move entry, or move announcements, and therefore does not claim a fully accessible interactive-board experience. Callers that need an accessible interactive board must build that layer above the renderer.
+The renderer exposes the board as one labelled image. `ariaLabel` in the core package and `boardLabel` in React customize that label; pieces and annotation shapes are decorative and hidden from assistive technology. The package does not implement keyboard interaction, roving square focus, screen-reader move entry, or move announcements, and therefore does not claim a fully accessible interactive-board experience. Callers that need an accessible interactive board must build that layer above the renderer.
 
 ## React adapter
 
 `@plywise/chessboard-react` exposes the core contract as props:
 
-- `position`, `orientation`, `boardLabel`, `animationMs` (baseline).
-- `interaction` (`{ destinations, onEvent } | null`).
+- `interaction` (`{ destinations, onEvent, annotationGestures? } | null`).
 - `presentation` (`{ selected?, lastMove?, checked? }`).
 - `annotations` (`Annotation[]`).
 - `visibleLayers` (`ReadonlySet<string> | undefined`; omitted shows all, empty hides all).
 
 The adapter creates exactly one core renderer instance, forwards every prop change through that instance, keeps the latest `onEvent` available without recreating the board, and destroys the instance on unmount. No React state is used for board DOM, drag coordinates, or transient pointer state; pointer movement never triggers a React render.
 
-Re-exported domain types include `Color`, `File`, `Rank`, `Role`, `Square`, `Piece`, `Position`, `Annotation`, `ArrowAnnotation`, `CircleAnnotation`, `JsonValue`, `Destinations`, `Interaction`, `InteractionEvent`, `Presentation`, `LastMove`, `ChessboardConfig`, and `ChessboardUpdate`.
+Re-exported domain types include `Color`, `File`, `Rank`, `Role`, `Square`, `Piece`, `Position`, `Annotation`, `ArrowAnnotation`, `CircleAnnotation`, `AnnotationGesture`, `AnnotationModifier`, `JsonValue`, `Destinations`, `Interaction`, `InteractionEvent`, `Presentation`, `LastMove`, `ChessboardConfig`, and `ChessboardUpdate`.
 
 ## Support contract
 

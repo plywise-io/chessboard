@@ -30,18 +30,19 @@ const board = createChessboard(element, {
 board.destroy();
 ```
 
-## Public surface
+### Domain types
 
 ```ts
 import type {
   Color, File, Rank, Role, Square, Piece, Position,
-  Annotation, ArrowAnnotation, CircleAnnotation, JsonValue,
+  Annotation, ArrowAnnotation, CircleAnnotation,
+  AnnotationGesture, AnnotationModifier,
+  JsonValue,
   ChessboardConfig, ChessboardUpdate, Chessboard,
   Destinations, Interaction, InteractionEvent, Presentation, LastMove,
 } from "@plywise/chessboard";
-```
 
-### Domain types
+```
 
 - `Color`: `"white" | "black"`.
 - `File`, `Rank`: file letter and rank digit of an algebraic square.
@@ -49,6 +50,8 @@ import type {
 - `Role`: `"pawn" | "knight" | "bishop" | "rook" | "queen" | "king"`.
 - `Piece`: `{ readonly color: Color; readonly role: Role }`.
 - `Position`: `ReadonlyMap<Square, Piece>`. The renderer validates and copies it at the seam.
+- `AnnotationModifier`: `"alt" | "ctrl" | "meta" | "shift"`. `meta` matches the Command key on macOS keyboards.
+- `AnnotationGesture`: `{ readonly modifiers?: readonly AnnotationModifier[]; readonly color?: string }`. A caller-supplied binding from modifier set to CSS colour string.
 
 ### Configuration and updates
 
@@ -57,10 +60,10 @@ import type {
 
 ### Interaction
 
-```ts
 interface Interaction {
   readonly destinations: ReadonlyMap<Square, readonly Square[]>;
   readonly onEvent: (event: InteractionEvent) => void;
+  readonly annotationGestures?: readonly AnnotationGesture[];
 }
 ```
 
@@ -69,12 +72,41 @@ interface Interaction {
 - `{ type: "select", square: Square, origin: "pointer" }`
 - `{ type: "clear", origin: "pointer" }`
 - `{ type: "move", from: Square, to: Square, origin: "selection" | "drag" }`
-- `{ type: "circle", square: Square, origin: "pointer" }`
-- `{ type: "arrow", from: Square, to: Square, origin: "pointer" }`
+- `{ type: "circle", square: Square, origin: "pointer", color?: string }`
+- `{ type: "arrow", from: Square, to: Square, origin: "pointer", color?: string }`
 
 A source absent from `destinations` is not selectable. An empty destination collection still identifies a selectable source. A pointer press must travel a few pixels before it becomes a drag; jitter-sized movement inside a click never lifts the piece.
 
 While `interaction` is enabled, right-button gestures report annotation intents instead of moving pieces: pressing and releasing the right button on one square emits a `circle` intent, and right-dragging between two squares emits an `arrow` intent. A translucent snapped preview is shown during the gesture and the native context menu is suppressed. These are requests only — the caller decides whether to add, remove, or ignore the corresponding annotation in its own state. Spectator boards (`interaction: null` or omitted) keep the native context menu and emit nothing.
+
+#### Modifier-coloured annotation gestures
+
+`interaction.annotationGestures` is an optional list of caller-supplied bindings from a modifier combination to a CSS colour string. The colour is applied to the snapped preview and to the `circle`/`arrow` event for the duration of the gesture:
+
+```ts
+const board = createChessboard(element, {
+  position,
+  interaction: {
+    destinations,
+    onEvent,
+    annotationGestures: [
+      { modifiers: [], color: "#15781B" },
+      { modifiers: ["shift"], color: "#dc322f" },
+      { modifiers: ["alt", "ctrl"], color: "rgba(20, 85, 180, 0.9)" },
+    ],
+  },
+});
+```
+
+- `color` is a CSS colour string. The renderer applies it through the existing annotation `color` path; there is no bundled palette, enum, or extra dependency.
+- `meta` matches the Command key on macOS keyboards (the same key that surfaces as `Meta` in `PointerEvent` and `KeyboardEvent`).
+- Bindings use exact sets. `{ modifiers: ["shift"], ... }` matches only when exactly shift is pressed; it does not match `ctrl`+`shift`. `modifiers` omitted or `[]` means "no modifiers pressed" (the unmodified right-button gesture).
+- Supported modifier names are exactly `"alt"`, `"ctrl"`, `"meta"`, and `"shift"`. Each binding's `modifiers` list must not repeat a name; binding sets must be unique after sorting.
+- The colour is snapshotted on `pointerdown`. The preview and the emitted `circle`/`arrow` event retain it even if the modifier state changes before `pointerup`.
+- Right-button gestures remain enabled whenever `interaction` is set. A modifier combination without a matching binding still emits the existing `circle`/`arrow` intent using the stylesheet-default preview colour (`--pw-annotation-color`). The event object keeps its original shape with no extra `color` property.
+- The renderer never owns annotation state: the binding only chooses a colour. Annotation `id`, `layer`, `metadata`, persistence, and toggle semantics stay with the caller.
+
+`annotationGestures` is validated and copied at the boundary: it must be an array; each entry is an object; `modifiers`, when present, only contains the allowed names without duplicates; `color`, when present, is a string; the normalised binding set (sorted modifiers) must not appear twice. Invalid `annotationGestures` throw `TypeError`.
 
 ### Presentation
 
@@ -121,7 +153,7 @@ type JsonValue = string | number | boolean | null | { [k: string]: JsonValue } |
 
 Every public input is validated at the boundary:
 
-- invalid squares, pieces, colors, orientations, animation durations, interaction inputs, presentation inputs, annotations, and layer visibility values throw `TypeError`;
+- invalid squares, pieces, colors, orientations, animation durations, interaction inputs (including malformed `annotationGestures`), presentation inputs, annotations, and layer visibility values throw `TypeError`;
 - `set` or `move` after `destroy` throw `Error`;
 - caller collections are copied so later external mutation cannot silently alter rendered state.
 

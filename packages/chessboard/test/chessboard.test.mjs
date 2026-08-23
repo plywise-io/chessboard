@@ -763,6 +763,7 @@ function dispatchPointer(
     isPrimary = true,
     outside = false,
     button = 0,
+    modifiers = {},
   } = {},
 ) {
   const board = host.querySelector(".pw-board");
@@ -785,6 +786,10 @@ function dispatchPointer(
     pointerId,
     pointerType,
     isPrimary,
+    ctrlKey: Boolean(modifiers.ctrl),
+    shiftKey: Boolean(modifiers.shift),
+    altKey: Boolean(modifiers.alt),
+    metaKey: Boolean(modifiers.meta),
   });
   board.dispatchEvent(event);
   return event;
@@ -1297,6 +1302,351 @@ test("left-click selection still works after right-button gestures", () => {
     { type: "select", square: "e2", origin: "pointer" },
   ]);
 });
+// Modifier-colored annotation gestures
+
+test("right-click with no annotationGestures keeps the existing event shape", () => {
+  const events = [];
+  const { host } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      onEvent: (e) => events.push(e),
+    },
+  });
+  dispatchPointer(host, "pointerdown", "d5", { button: 2 });
+  dispatchPointer(host, "pointerup", "d5", { button: 2 });
+  assert.equal(events.length, 1);
+  // Event must NOT carry a `color` property at all (not `color: undefined`).
+  assert.ok(!("color" in events[0]));
+  assert.deepEqual(Object.keys(events[0]).sort(), ["origin", "square", "type"]);
+  const preview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.equal(preview, null);
+});
+
+test("configured plain binding colors the preview and emitted circle", () => {
+  const events = [];
+  const { host } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      annotationGestures: [{ color: "rgb(255, 0, 0)" }],
+      onEvent: (e) => events.push(e),
+    },
+  });
+  dispatchPointer(host, "pointerdown", "d5", { button: 2 });
+  const preview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.ok(preview);
+  assert.equal(preview.style.stroke, "rgb(255, 0, 0)");
+  dispatchPointer(host, "pointerup", "d5", { button: 2 });
+  assert.deepEqual(events, [
+    {
+      type: "circle",
+      square: "d5",
+      origin: "pointer",
+      color: "rgb(255, 0, 0)",
+    },
+  ]);
+});
+
+test("configured plain binding only matches gestures with no modifiers", () => {
+  const events = [];
+  const { host } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      annotationGestures: [{ color: "rgb(255, 0, 0)" }],
+      onEvent: (e) => events.push(e),
+    },
+  });
+  // Shift held — plain binding does not match.
+  dispatchPointer(host, "pointerdown", "d5", {
+    button: 2,
+    modifiers: { shift: true },
+  });
+  const preview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.ok(preview);
+  assert.equal(preview.style.stroke, "");
+  dispatchPointer(host, "pointerup", "d5", {
+    button: 2,
+    modifiers: { shift: true },
+  });
+  assert.equal(events.length, 1);
+  assert.ok(!("color" in events[0]));
+});
+
+test("Shift binding colors preview and event only when Shift is held", () => {
+  const events = [];
+  const { host } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      annotationGestures: [{ modifiers: ["shift"], color: "rgb(0, 0, 255)" }],
+      onEvent: (e) => events.push(e),
+    },
+  });
+  // No modifier — Shift binding does not match.
+  dispatchPointer(host, "pointerdown", "d5", { button: 2 });
+  dispatchPointer(host, "pointerup", "d5", { button: 2 });
+  assert.equal(events.length, 1);
+  assert.ok(!("color" in events[0]));
+
+  // Shift held — binding matches.
+  dispatchPointer(host, "pointerdown", "e4", {
+    button: 2,
+    modifiers: { shift: true },
+  });
+  const preview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.ok(preview);
+  assert.equal(preview.style.stroke, "rgb(0, 0, 255)");
+  dispatchPointer(host, "pointerup", "e4", {
+    button: 2,
+    modifiers: { shift: true },
+  });
+  assert.deepEqual(events.slice(1), [
+    {
+      type: "circle",
+      square: "e4",
+      origin: "pointer",
+      color: "rgb(0, 0, 255)",
+    },
+  ]);
+});
+
+test("Shift binding does not match Ctrl+Shift (exact set)", () => {
+  const events = [];
+  const { host } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      annotationGestures: [{ modifiers: ["shift"], color: "rgb(0, 0, 255)" }],
+      onEvent: (e) => events.push(e),
+    },
+  });
+  dispatchPointer(host, "pointerdown", "d5", {
+    button: 2,
+    modifiers: { ctrl: true, shift: true },
+  });
+  const preview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.ok(preview);
+  assert.equal(preview.style.stroke, "");
+  dispatchPointer(host, "pointerup", "d5", {
+    button: 2,
+    modifiers: { ctrl: true, shift: true },
+  });
+  assert.equal(events.length, 1);
+  assert.ok(!("color" in events[0]));
+});
+
+test("Ctrl+Shift binding matches only when both modifiers are held", () => {
+  const events = [];
+  const { host } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      annotationGestures: [
+        { modifiers: ["ctrl", "shift"], color: "rgb(0, 200, 0)" },
+      ],
+      onEvent: (e) => events.push(e),
+    },
+  });
+  // Shift alone — binding does not match.
+  dispatchPointer(host, "pointerdown", "d5", {
+    button: 2,
+    modifiers: { shift: true },
+  });
+  dispatchPointer(host, "pointerup", "d5", {
+    button: 2,
+    modifiers: { shift: true },
+  });
+  assert.equal(events.length, 1);
+  assert.ok(!("color" in events[0]));
+
+  // Ctrl+Shift — binding matches.
+  dispatchPointer(host, "pointerdown", "e4", {
+    button: 2,
+    modifiers: { ctrl: true, shift: true },
+  });
+  const preview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.ok(preview);
+  assert.equal(preview.style.stroke, "rgb(0, 200, 0)");
+  dispatchPointer(host, "pointerup", "e4", {
+    button: 2,
+    modifiers: { ctrl: true, shift: true },
+  });
+  assert.deepEqual(events.slice(1), [
+    {
+      type: "circle",
+      square: "e4",
+      origin: "pointer",
+      color: "rgb(0, 200, 0)",
+    },
+  ]);
+});
+
+test("arrow gesture also resolves color from the configured binding", async () => {
+  const events = [];
+  const { host } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      annotationGestures: [{ modifiers: ["shift"], color: "rgb(0, 0, 255)" }],
+      onEvent: (e) => events.push(e),
+    },
+  });
+  dispatchPointer(host, "pointerdown", "e2", {
+    button: 2,
+    modifiers: { shift: true },
+  });
+  const preview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.ok(preview);
+  assert.equal(preview.style.stroke, "rgb(0, 0, 255)");
+  dispatchPointer(host, "pointermove", "e4", {
+    button: 2,
+    modifiers: { shift: true },
+  });
+  await flushRaf();
+  const arrowPreview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.equal(arrowPreview?.getAttribute("data-annotation-kind"), "arrow");
+  assert.equal(arrowPreview.style.stroke, "rgb(0, 0, 255)");
+  dispatchPointer(host, "pointerup", "e4", {
+    button: 2,
+    modifiers: { shift: true },
+  });
+  assert.deepEqual(events, [
+    {
+      type: "arrow",
+      from: "e2",
+      to: "e4",
+      origin: "pointer",
+      color: "rgb(0, 0, 255)",
+    },
+  ]);
+});
+
+test("color is snapshotted on pointerdown and survives modifier changes", async () => {
+  const events = [];
+  const { host } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      annotationGestures: [{ modifiers: ["shift"], color: "rgb(0, 0, 255)" }],
+      onEvent: (e) => events.push(e),
+    },
+  });
+  // pointerdown with Shift — color captured.
+  dispatchPointer(host, "pointerdown", "e2", {
+    button: 2,
+    modifiers: { shift: true },
+  });
+  const circlePreview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.ok(circlePreview);
+  assert.equal(circlePreview.style.stroke, "rgb(0, 0, 255)");
+  // pointermove WITHOUT Shift — preview must still show the snapped color.
+  dispatchPointer(host, "pointermove", "e4", { button: 2 });
+  await flushRaf();
+  const arrowPreview = host.querySelector('[data-annotation-id="pw-preview"]');
+  assert.equal(arrowPreview?.getAttribute("data-annotation-kind"), "arrow");
+  assert.equal(arrowPreview.style.stroke, "rgb(0, 0, 255)");
+  // pointerup without Shift — event still carries the snapshotted color.
+  dispatchPointer(host, "pointerup", "e4", { button: 2 });
+  assert.deepEqual(events, [
+    {
+      type: "arrow",
+      from: "e2",
+      to: "e4",
+      origin: "pointer",
+      color: "rgb(0, 0, 255)",
+    },
+  ]);
+});
+
+test("annotationGestures rejects malformed configurations", () => {
+  // Top-level must be an array.
+  assert.throws(
+    () =>
+      makeBoard(new Map(), {
+        interaction: {
+          destinations: new Map(),
+          annotationGestures: "nope",
+          onEvent: () => {},
+        },
+      }),
+    /annotationGestures must be an array/,
+  );
+
+  // Entry must be an object.
+  assert.throws(
+    () =>
+      makeBoard(new Map(), {
+        interaction: {
+          destinations: new Map(),
+          annotationGestures: [null],
+          onEvent: () => {},
+        },
+      }),
+    /annotationGestures\[0\] must be an object/,
+  );
+
+  // Modifier must be one of the allowed names.
+  assert.throws(
+    () =>
+      makeBoard(new Map(), {
+        interaction: {
+          destinations: new Map(),
+          annotationGestures: [{ modifiers: ["super"], color: "red" }],
+          onEvent: () => {},
+        },
+      }),
+    /modifiers\[0\] must be one of/,
+  );
+
+  // Inherited Object.prototype keys are not modifier names.
+  assert.throws(
+    () =>
+      makeBoard(new Map(), {
+        interaction: {
+          destinations: new Map(),
+          annotationGestures: [{ modifiers: ["toString"], color: "red" }],
+          onEvent: () => {},
+        },
+      }),
+    /modifiers\[0\] must be one of/,
+  );
+
+  // Repeated modifier inside a single binding is rejected.
+  assert.throws(
+    () =>
+      makeBoard(new Map(), {
+        interaction: {
+          destinations: new Map(),
+          annotationGestures: [{ modifiers: ["shift", "shift"], color: "red" }],
+          onEvent: () => {},
+        },
+      }),
+    /modifiers must not repeat/,
+  );
+
+  // Duplicate normalized binding set across the list is rejected.
+  assert.throws(
+    () =>
+      makeBoard(new Map(), {
+        interaction: {
+          destinations: new Map(),
+          annotationGestures: [
+            { modifiers: ["shift"], color: "red" },
+            { modifiers: ["shift"], color: "blue" },
+          ],
+          onEvent: () => {},
+        },
+      }),
+    /annotationGestures has duplicate modifier binding/,
+  );
+
+  // Color must be a string when provided.
+  assert.throws(
+    () =>
+      makeBoard(new Map(), {
+        interaction: {
+          destinations: new Map(),
+          annotationGestures: [{ color: 5 }],
+          onEvent: () => {},
+        },
+      }),
+    /color must be a string when provided/,
+  );
+});
 
 function setBoardRect(host, left, top, size) {
   Object.defineProperty(
@@ -1460,6 +1810,52 @@ test("renders SVG piece sets and square themes with glyph fallback", () => {
   board.set({ theme: null });
   assert.equal(el.style.getPropertyValue("--pw-light-square"), "");
   assert.equal(el.style.getPropertyValue("--pw-dark-square"), "");
+});
+
+test("renders the vendored default piece set without a pieceSet option", () => {
+  const dom = new JSDOM('<div id="host"></div>');
+  const host = dom.window.document.querySelector("#host");
+  const position = new Map([
+    ["e2", { color: "white", role: "king" }],
+    ["e7", { color: "black", role: "pawn" }],
+  ]);
+  const board = createChessboard(host, { position, animationMs: 0 });
+  const king = host.querySelector('[data-square="e2"]');
+  const pawn = host.querySelector('[data-square="e7"]');
+  // Omitting pieceSet renders the vendored Cburnett artwork as data URIs.
+  // JSDOM serializes url() values lowercased; compare case-insensitively.
+  assert.match(
+    king.style.backgroundImage.toLowerCase(),
+    /^url\("data:image\/svg\+xml,/,
+  );
+  assert.match(
+    pawn.style.backgroundImage.toLowerCase(),
+    /^url\("data:image\/svg\+xml,/,
+  );
+  // The embedded artwork must stay decodable: the XML declaration has to be
+  // the very first thing (leading whitespace makes the document invalid) and
+  // the decoded source must parse as SVG.
+  const uri = king.style.backgroundImage
+    .toLowerCase()
+    .match(/^url\("(.*)"\)$/)[1];
+  assert.match(uri, /^data:image\/svg\+xml,%3c%3fxml/);
+  const svg = decodeURIComponent(uri.slice("data:image/svg+xml,".length));
+  const doc = new dom.window.DOMParser().parseFromString(svg, "image/svg+xml");
+  assert.equal(doc.querySelector("parsererror"), null);
+  assert.equal(king.textContent, "");
+
+  // An explicit URL base overrides the vendored default…
+  const base = "https://example.com/pieces/other/";
+  board.set({ pieceSet: base });
+  assert.equal(
+    king.style.backgroundImage.toLowerCase(),
+    `url("${base}wk.svg")`,
+  );
+
+  // …and null restores Unicode glyphs.
+  board.set({ pieceSet: null });
+  assert.equal(king.style.backgroundImage, "");
+  assert.equal(king.textContent, "♔");
 });
 
 test("rejects invalid pieceSet and theme values", () => {

@@ -15,6 +15,8 @@ import { useEffect, useRef } from "react";
 
 export type {
   Annotation,
+  AnnotationGesture,
+  AnnotationModifier,
   ArrowAnnotation,
   BoardTheme,
   BoardThemeName,

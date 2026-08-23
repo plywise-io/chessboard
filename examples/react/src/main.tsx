@@ -1,5 +1,6 @@
 import type {
   Annotation,
+  AnnotationGesture,
   Interaction,
   InteractionEvent,
   Piece,
@@ -133,6 +134,12 @@ const ANNOTATIONS: readonly Annotation[] = [
   },
 ];
 
+const ANNOTATION_GESTURES: readonly AnnotationGesture[] = [
+  { modifiers: [], color: "#15781B" },
+  { modifiers: ["ctrl"], color: "#268bd2" },
+  { modifiers: ["alt"], color: "#c0392b" },
+];
+
 const NO_ANNOTATIONS: readonly Annotation[] = [];
 
 function App() {
@@ -182,20 +189,23 @@ function App() {
     }
     if (event.type === "circle" || event.type === "arrow") {
       // Right-button gesture: toggle the requested shape in caller state.
+      const color = event.color ?? "#15781B";
       const annotation: Annotation =
         event.type === "circle"
           ? {
-              id: `circle:${event.square}`,
+              id: `circle:${event.square}:${color}`,
               kind: "circle",
               square: event.square,
               layer: "user",
+              color,
             }
           : {
-              id: `arrow:${event.from}-${event.to}`,
+              id: `arrow:${event.from}-${event.to}:${color}`,
               kind: "arrow",
               from: event.from,
               to: event.to,
               layer: "user",
+              color,
             };
       setDrawn((prev) =>
         prev.some((existing) => existing.id === annotation.id)
@@ -218,9 +228,8 @@ function App() {
       setSelected(undefined);
     }
   }, []);
-
   const interaction = useMemo<Interaction>(
-    () => ({ destinations, onEvent }),
+    () => ({ destinations, onEvent, annotationGestures: ANNOTATION_GESTURES }),
     [destinations, onEvent],
   );
   const presentation = useMemo<Presentation>(
@@ -263,10 +272,8 @@ function App() {
         animationMs={150}
         interaction={interaction}
         annotations={showAnnotations ? mergedAnnotations : NO_ANNOTATIONS}
-        pieceSet={
-          pieceSetName === "glyphs" ? null : (pieceSets[pieceSetName] ?? null)
-        }
-        theme={boardThemes[themeName] ?? null}
+        pieceSet={pieceSetName === "glyphs" ? null : pieceSets[pieceSetName]}
+        theme={boardThemes[themeName]}
         presentation={presentation}
         {...(visibleLayers === undefined ? {} : { visibleLayers })}
       />

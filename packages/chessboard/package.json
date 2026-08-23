@@ -25,6 +25,8 @@
     "dist/index.js",
     "dist/internal/values.d.ts",
     "dist/internal/values.js",
+    "dist/internal/defaultPieces.d.ts",
+    "dist/internal/defaultPieces.js",
     "dist/style.css",
     "dist/style.d.ts"
   ],

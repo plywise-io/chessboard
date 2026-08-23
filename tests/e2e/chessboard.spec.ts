@@ -529,7 +529,7 @@ test("right-clicking a square toggles a circle annotation", async ({
   await page.mouse.down({ button: "right" });
   await page.mouse.up({ button: "right" });
 
-  const circle = page.locator('[data-annotation-id="circle:d5"]');
+  const circle = page.locator('[data-annotation-id="circle:d5:#15781B"]');
   await expect(circle).toHaveAttribute("data-annotation-kind", "circle");
   await expect(page.getByTestId("last-event")).toHaveText(
     "Last event: circle d5",
@@ -539,7 +539,9 @@ test("right-clicking a square toggles a circle annotation", async ({
   await page.mouse.move(d5.x, d5.y);
   await page.mouse.down({ button: "right" });
   await page.mouse.up({ button: "right" });
-  await expect(page.locator('[data-annotation-id="circle:d5"]')).toHaveCount(0);
+  await expect(
+    page.locator('[data-annotation-id="circle:d5:#15781B"]'),
+  ).toHaveCount(0);
 });
 
 test("right-dragging between squares toggles an arrow annotation", async ({
@@ -559,7 +561,7 @@ test("right-dragging between squares toggles an arrow annotation", async ({
   ).toHaveAttribute("data-annotation-kind", "arrow");
 
   await page.mouse.up({ button: "right" });
-  const arrow = page.locator('[data-annotation-id="arrow:e2-e4"]');
+  const arrow = page.locator('[data-annotation-id="arrow:e2-e4:#15781B"]');
   await expect(arrow).toHaveAttribute("data-annotation-kind", "arrow");
   await expect(page.getByTestId("last-event")).toHaveText(
     "Last event: arrow e2→e4",
@@ -573,7 +575,7 @@ test("right-dragging between squares toggles an arrow annotation", async ({
   await page.mouse.down({ button: "right" });
   await page.mouse.move(e4.x, e4.y, { steps: 4 });
   await page.mouse.up({ button: "right" });
-  await expect(page.locator('[data-annotation-id="arrow:e2-e4"]')).toHaveCount(
-    0,
-  );
+  await expect(
+    page.locator('[data-annotation-id="arrow:e2-e4:#15781B"]'),
+  ).toHaveCount(0);
 });

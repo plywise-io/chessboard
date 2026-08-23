@@ -1,3 +1,4 @@
+import { defaultPieces } from "./internal/defaultPieces.js";
 import {
   type BoardFile,
   type BoardRole,
@@ -40,12 +41,14 @@ export type CircleEvent = {
   readonly type: "circle";
   readonly square: Square;
   readonly origin: "pointer";
+  readonly color?: string;
 };
 export type ArrowEvent = {
   readonly type: "arrow";
   readonly from: Square;
   readonly to: Square;
   readonly origin: "pointer";
+  readonly color?: string;
 };
 export type InteractionEvent =
   | SelectEvent
@@ -54,11 +57,18 @@ export type InteractionEvent =
   | CircleEvent
   | ArrowEvent;
 
+export type AnnotationModifier = "alt" | "ctrl" | "meta" | "shift";
+export interface AnnotationGesture {
+  readonly modifiers?: readonly AnnotationModifier[];
+  readonly color?: string;
+}
+
 export type Destinations = ReadonlyMap<Square, readonly Square[]>;
 
 export interface Interaction {
   readonly destinations: Destinations;
   readonly onEvent: (event: InteractionEvent) => void;
+  readonly annotationGestures?: readonly AnnotationGesture[];
 }
 
 export interface LastMove {
@@ -111,9 +121,11 @@ const PIECE_SET_CDN =
  * release); fantasy, spatial, and celtic are MIT artwork by Maurizio Monge
  * served from the lichess asset mirror. Licenses verified against lila's
  * COPYING.md and each upstream LICENSE file. Omitting `pieceSet` renders
- * built-in Unicode glyphs and involves no asset license.
+ * the vendored default set (Cburnett artwork under its BSD-3-Clause option —
+ * see assets/cburnett/LICENSE.md).
  *
  * NOTICE (required when distributing this package or its artifacts):
+ *   - default    © Colin M.L. Burnett — https://commons.wikimedia.org/wiki/User:Cburnett
  *   - `firi`      © James Faure — https://github.com/jfaure/Firi-pieceset
  *   - `kiwenSuwi` © neverRare   — https://lichess.org/@/neverRare
  */
@@ -151,8 +163,9 @@ export interface ChessboardConfig {
   readonly presentation?: Presentation;
   /**
    * Base URL of a piece-set directory containing `{w|b}{P,N,B,R,Q,K}.svg`
-   * files (see {@link pieceSets}). Pieces render as images; omit or pass
-   * `null` for the built-in Unicode glyphs.
+   * files (see {@link pieceSets}). Omitted renders the vendored default
+   * artwork (Cburnett, embedded data URIs); a string renders that
+   * directory's images; `null` renders built-in Unicode glyphs.
    */
   readonly pieceSet?: string | null;
   /** Square colors (see {@link boardThemes}); omit or pass `null` to reset. */
@@ -176,7 +189,8 @@ export interface ChessboardUpdate {
   readonly presentation?: Presentation;
   /**
    * Same contract as on {@link ChessboardConfig}. Omitting the field leaves
-   * the current piece set unchanged; `null` restores Unicode glyphs.
+   * the current piece set unchanged; `null` restores Unicode glyphs. The
+   * vendored default can only be selected at creation time.
    */
   readonly pieceSet?: string | null;
   /**
@@ -226,6 +240,21 @@ const pieceLetters: Record<Role, string> = {
   queen: "Q",
   king: "K",
 };
+// Data URIs for the vendored default set are encoded lazily per piece code,
+// so boards that never show a piece never encode its artwork.
+const defaultPieceUrls = new Map<string, string>();
+
+function defaultPieceUrl(color: Color, role: Role): string {
+  const code = `${color[0]}${pieceLetters[role]}` as keyof typeof defaultPieces;
+  let url = defaultPieceUrls.get(code);
+  if (url === undefined) {
+    // Trim guards the XML declaration: leading template-literal whitespace
+    // before <?xml makes the whole document invalid.
+    url = `data:image/svg+xml,${encodeURIComponent(defaultPieces[code].trim())}`;
+    defaultPieceUrls.set(code, url);
+  }
+  return url;
+}
 
 // A press must travel this far (CSS px) before it becomes a drag, so
 // jitter-sized movement inside a click never lifts the piece.
@@ -291,7 +320,7 @@ export function createChessboard(
   let visibleLayers: ReadonlySet<string> | undefined = validateVisibleLayers(
     config.visibleLayers,
   );
-  let pieceSet: string | undefined = validatePieceSet(config.pieceSet);
+  let pieceSet: string | null | undefined = validatePieceSet(config.pieceSet);
   let theme: BoardTheme | undefined = validateTheme(config.theme);
   let destroyed = false;
   // A pointerdown starts a candidate; the first move fills in the visual
@@ -317,6 +346,7 @@ export function createChessboard(
   type DrawState = {
     readonly source: Square;
     readonly pointerId: number;
+    readonly color: string | undefined;
     preview: SVGElement | null;
     clientX: number;
     clientY: number;
@@ -347,17 +377,22 @@ export function createChessboard(
     `${validateAnimation(config.animationMs ?? 150)}ms`,
   );
   function applyTheme(next: BoardTheme | undefined): void {
-    const light = next?.light;
-    if (light === undefined) board.style.removeProperty("--pw-light-square");
-    else board.style.setProperty("--pw-light-square", light);
-    const dark = next?.dark;
-    if (dark === undefined) board.style.removeProperty("--pw-dark-square");
-    else board.style.setProperty("--pw-dark-square", dark);
+    for (const key of ["light", "dark"] as const) {
+      const color = next?.[key];
+      if (color === undefined) {
+        board.style.removeProperty(`--pw-${key}-square`);
+      } else {
+        board.style.setProperty(`--pw-${key}-square`, color);
+      }
+    }
   }
 
   function repaintPieceImage(node: HTMLDivElement, piece: Piece): void {
-    if (pieceSet) {
-      const url = `${pieceSet}${piece.color[0]}${pieceLetters[piece.role]}.svg`;
+    if (pieceSet !== null) {
+      const url =
+        typeof pieceSet === "string"
+          ? `${pieceSet}${piece.color[0]}${pieceLetters[piece.role]}.svg`
+          : defaultPieceUrl(piece.color, piece.role);
       if (node.style.backgroundImage !== `url("${url}")`) {
         node.style.backgroundImage = `url("${url}")`;
       }
@@ -627,6 +662,7 @@ export function createChessboard(
             kind: "circle",
             square: active.source,
             layer: "preview",
+            ...(active.color !== undefined ? { color: active.color } : {}),
           }
         : {
             id: "pw-preview",
@@ -634,6 +670,7 @@ export function createChessboard(
             from: active.source,
             to: current,
             layer: "preview",
+            ...(active.color !== undefined ? { color: active.color } : {}),
           };
     let node = active.preview;
     // The rendered node's kind attribute is the source of truth; swap the
@@ -688,6 +725,29 @@ export function createChessboard(
     piece.dataset.dragging = "true";
     piece.style.transition = "none";
   }
+
+  // Resolve a configured annotation gesture's color for the current
+  // pointerdown: exact-set match on the four modifier keys. Returns
+  // undefined when no binding matches (including the no-gestures case) so
+  // the preview falls back to the stylesheet default.
+  function resolveAnnotationGestureColor(
+    event: PointerEvent,
+  ): string | undefined {
+    const gestures = interaction?.annotationGestures;
+    if (!gestures) return undefined;
+    const pressed: AnnotationModifier[] = [];
+    if (event.altKey) pressed.push("alt");
+    if (event.ctrlKey) pressed.push("ctrl");
+    if (event.metaKey) pressed.push("meta");
+    if (event.shiftKey) pressed.push("shift");
+    const pressedKey = pressed.sort().join("+");
+    for (const gesture of gestures) {
+      const mods = gesture.modifiers ?? [];
+      if ([...mods].sort().join("+") === pressedKey) return gesture.color;
+    }
+    return undefined;
+  }
+
   function pointerDown(event: PointerEvent): void {
     if (event.button === 2) {
       // Right-button gesture: circle on release over the source square,
@@ -699,6 +759,7 @@ export function createChessboard(
       draw = {
         source: target,
         pointerId: event.pointerId,
+        color: resolveAnnotationGestureColor(event),
         preview: null,
         clientX: event.clientX,
         clientY: event.clientY,
@@ -831,12 +892,22 @@ export function createChessboard(
         if (drop && interaction !== null) {
           interaction.onEvent(
             drop === activeDraw.source
-              ? { type: "circle", square: drop, origin: "pointer" }
+              ? {
+                  type: "circle",
+                  square: drop,
+                  origin: "pointer",
+                  ...(activeDraw.color !== undefined
+                    ? { color: activeDraw.color }
+                    : {}),
+                }
               : {
                   type: "arrow",
                   from: activeDraw.source,
                   to: drop,
                   origin: "pointer",
+                  ...(activeDraw.color !== undefined
+                    ? { color: activeDraw.color }
+                    : {}),
                 },
           );
         }
@@ -1133,8 +1204,8 @@ function validateAnimation(value: number): number {
 
 function validatePieceSet(
   value: string | null | undefined,
-): string | undefined {
-  if (value === null || value === undefined) return undefined;
+): string | null | undefined {
+  if (value === null || value === undefined) return value;
   if (typeof value !== "string" || value.length === 0) {
     throw new TypeError("pieceSet must be a non-empty URL string or null");
   }
@@ -1148,14 +1219,83 @@ function validateTheme(
   if (!value || typeof value !== "object") {
     throw new TypeError("theme must be an object or null");
   }
-  if (value.light !== undefined && typeof value.light !== "string") {
-    throw new TypeError("theme.light must be a CSS color string");
-  }
-  if (value.dark !== undefined && typeof value.dark !== "string") {
-    throw new TypeError("theme.dark must be a CSS color string");
+  for (const key of ["light", "dark"] as const) {
+    if (value[key] !== undefined && typeof value[key] !== "string") {
+      throw new TypeError(`theme.${key} must be a CSS color string`);
+    }
   }
   return value;
 }
+const ANNOTATION_MODIFIERS: Record<AnnotationModifier, true> = {
+  alt: true,
+  ctrl: true,
+  meta: true,
+  shift: true,
+};
+
+function validateAnnotationGestures(
+  value: readonly AnnotationGesture[] | undefined,
+): readonly AnnotationGesture[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new TypeError("interaction.annotationGestures must be an array");
+  }
+  const seen = new Set<string>();
+  const checked: AnnotationGesture[] = [];
+  for (const [index, gesture] of value.entries()) {
+    if (!gesture || typeof gesture !== "object") {
+      throw new TypeError(
+        `interaction.annotationGestures[${index}] must be an object`,
+      );
+    }
+    let modifiers: AnnotationModifier[] | undefined;
+    if (gesture.modifiers !== undefined) {
+      if (!Array.isArray(gesture.modifiers)) {
+        throw new TypeError(
+          `interaction.annotationGestures[${index}].modifiers must be an array`,
+        );
+      }
+      modifiers = [];
+      for (const [modifierIndex, raw] of gesture.modifiers.entries()) {
+        if (
+          typeof raw !== "string" ||
+          !Object.hasOwn(ANNOTATION_MODIFIERS, raw)
+        ) {
+          throw new TypeError(
+            `interaction.annotationGestures[${index}].modifiers[${modifierIndex}] must be one of alt, ctrl, meta, shift`,
+          );
+        }
+        const name = raw as AnnotationModifier;
+        if (modifiers.includes(name)) {
+          throw new TypeError(
+            `interaction.annotationGestures[${index}].modifiers must not repeat: ${name}`,
+          );
+        }
+        modifiers.push(name);
+      }
+    }
+    if (gesture.color !== undefined && typeof gesture.color !== "string") {
+      throw new TypeError(
+        `interaction.annotationGestures[${index}].color must be a string when provided`,
+      );
+    }
+    const key = modifiers === undefined ? "" : [...modifiers].sort().join("+");
+    if (seen.has(key)) {
+      throw new TypeError(
+        `interaction.annotationGestures has duplicate modifier binding: ${key || "(none)"}`,
+      );
+    }
+    seen.add(key);
+    const copy: {
+      -readonly [K in keyof AnnotationGesture]: AnnotationGesture[K];
+    } = {};
+    if (modifiers !== undefined) copy.modifiers = Object.freeze(modifiers);
+    if (gesture.color !== undefined) copy.color = gesture.color;
+    checked.push(copy);
+  }
+  return Object.freeze(checked);
+}
+
 function validateInteraction(value: Interaction): Interaction {
   if (!value || typeof value !== "object") {
     throw new TypeError("interaction must be an object");
@@ -1164,7 +1304,14 @@ function validateInteraction(value: Interaction): Interaction {
     throw new TypeError("interaction.onEvent must be a function");
   }
   const destinations = validateDestinations(value.destinations);
-  return { destinations, onEvent: value.onEvent };
+  const annotationGestures = validateAnnotationGestures(
+    value.annotationGestures,
+  );
+  return {
+    destinations,
+    onEvent: value.onEvent,
+    ...(annotationGestures !== undefined ? { annotationGestures } : {}),
+  };
 }
 
 function validateDestinations(value: Destinations): Destinations {

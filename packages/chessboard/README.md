@@ -52,7 +52,7 @@ import type {
 - `Piece`: `{ readonly color: Color; readonly role: Role }`.
 - `Position`: `ReadonlyMap<Square, Piece>`. The renderer validates and copies it at the seam.
 - `PieceSources`: `{ readonly wK: string; readonly wQ: string; readonly wR: string; readonly wB: string; readonly wN: string; readonly wP: string; readonly bK: string; readonly bQ: string; readonly bR: string; readonly bB: string; readonly bN: string; readonly bP: string }`. Each key is a non-empty raw SVG source string; the renderer serves the entries as `data:image/svg+xml` URIs.
-- `pieceSets`: `{ readonly rhosgfx: PieceSources; readonly kiwenSuwi: PieceSources; readonly chessnut: PieceSources; readonly spatial: PieceSources; readonly celtic: PieceSources }`. Curated raw-SVG catalogs vendored into the package; no network fetch is ever performed.
+- `pieceSets`: `{ readonly cburnett: PieceSources; readonly rhosgfx: PieceSources; readonly kiwenSuwi: PieceSources; readonly chessnut: PieceSources; readonly spatial: PieceSources; readonly celtic: PieceSources }`. Curated raw-SVG catalogs vendored into the package; no network fetch is ever performed.
 - `AnnotationModifier`: `"alt" | "ctrl" | "meta" | "shift"`. `meta` matches the Command key on macOS keyboards.
 - `AnnotationGesture`: `{ readonly modifiers?: readonly AnnotationModifier[]; readonly color?: string }`. A caller-supplied binding from modifier set to CSS colour string.
 
@@ -65,11 +65,11 @@ import type {
 
 `pieceSet` is optional. Omission renders the vendored Cburnett default artwork (BSD-3-Clause, see `assets/cburnett/LICENSE.md`). The accepted types are:
 
-- `PieceSources`: an object with `wK, wQ, wR, wB, wN, wP, bK, bQ, bR, bB, bN, bP` — each key is a non-empty raw SVG source string. The renderer serves them as `data:image/svg+xml` URIs and never reaches the network. The curated entries in `pieceSets` (`rhosgfx`, `kiwenSuwi`, `chessnut`, `spatial`, `celtic`) are this shape — vendored raw SVG sources embedded in the bundle.
+- `PieceSources`: an object with `wK, wQ, wR, wB, wN, wP, bK, bQ, bR, bB, bN, bP` — each key is a non-empty raw SVG source string. The renderer serves them as `data:image/svg+xml` URIs and never reaches the network. The curated entries in `pieceSets` (`cburnett`, `rhosgfx`, `kiwenSuwi`, `chessnut`, `spatial`, `celtic`) are this shape — vendored raw SVG sources embedded in the bundle.
 - `string`: a base URL pointing at a directory that holds `{w|b}{P,N,B,R,Q,K}.svg` files. Useful for callers who self-host their own artwork; the renderer fetches each file at render time.
 - `null`: restores Unicode glyphs and involves no asset license.
 
-Bundled catalogs carry permissive licenses only: `rhosgfx` is CC0; `kiwenSuwi` is CC BY 4.0 (attribution required); `chessnut` is Apache-2.0; `spatial` and `celtic` are MIT by Maurizio Monge. Per-file SHA-1 provenance and upstream links live in `assets/SETS.md`.
+Bundled catalogs: `cburnett` is Cburnett artwork under its BSD-3-Clause option (see `assets/cburnett/LICENSE.md`); `rhosgfx` is CC0; `kiwenSuwi` is CC BY 4.0 (attribution required); `chessnut` is Apache-2.0; `spatial` and `celtic` are MIT by Maurizio Monge. Per-file SHA-1 provenance and upstream links live in `assets/SETS.md`.
 
 ### Interaction
 

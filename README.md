@@ -230,13 +230,13 @@ bR, bB, bN, bP }` — each a raw SVG source string), a plain base-URL string
 for callers who want to self-host a directory of `{w|b}{P,N,B,R,Q,K}.svg`
 files, `null` to render Unicode glyphs, or omission to use the vendored
 Cburnett default. The curated entries in `pieceSets` ship inside the package
-as embedded raw SVG sources (`{@link PieceSources}`-shaped objects); the
-renderer serves them as `data:image/svg+xml` URIs so they never reach the
-network. The vendored catalog contains five curated entries and nothing
-else:
+as embedded raw SVG sources (PieceSources-shaped objects); the renderer
+serves them as `data:image/svg+xml` URIs so they never reach the network.
+The vendored catalog contains six curated entries and nothing else:
 
 | Set | License | Look |
 | --- | --- | --- |
+| `pieceSets.cburnett` | BSD-3-Clause option | Classic tournament set by Colin M.L. Burnett |
 | `pieceSets.rhosgfx` | CC0-1.0 | Flat clean, no attribution required |
 | `pieceSets.kiwenSuwi` | CC BY 4.0 (attribution) | Hand-drawn minimal set by neverRare |
 | `pieceSets.chessnut` | Apache-2.0 | Flat modern set by Lex Luengas |
@@ -302,8 +302,14 @@ The renderer does not implement chess rules, FEN/PGN parsing, legal-move calcula
 npm ci
 npm exec -- playwright install chromium
 npm run verify
-npm run dev
+npm run dev        # Vite example on http://localhost:5173
+npm run storybook # interactive API reference on http://localhost:6006
 ```
+
+The Storybook playground (`packages/chessboard-react/stories/`) doubles as the
+living API reference: every feature — interaction, presentation marks,
+annotation layers, modifier-coloured gestures, themes, and piece sets — has a
+runnable story with controls.
 
 `npm run verify` runs Biome, TypeScript, unit tests, `publint`, Are the Types Wrong, the packed-tarball consumer build, and Chromium smoke tests. Run `npm run format` to apply Biome fixes.
 

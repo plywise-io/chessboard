@@ -38,6 +38,10 @@
   font-size: clamp(1.5rem, 9cqi, 5rem);
   line-height: 1;
   text-shadow: 0 1px 1px rgb(255 255 255 / 45%);
+  /* Image piece sets paint here via an inline background-image. */
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
   transform: translate3d(
     calc(var(--pw-file) * 100%),
     calc(var(--pw-rank) * 100%),

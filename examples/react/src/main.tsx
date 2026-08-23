@@ -8,7 +8,7 @@ import type {
   Square,
 } from "@plywise/chessboard";
 import "@plywise/chessboard/style.css";
-import { Chessboard } from "@plywise/chessboard-react";
+import { boardThemes, Chessboard, pieceSets } from "@plywise/chessboard-react";
 import {
   StrictMode,
   useCallback,
@@ -141,6 +141,8 @@ function App() {
     () => new Set(),
   );
   const [drawn, setDrawn] = useState<readonly Annotation[]>([]);
+  const [pieceSetName, setPieceSetName] = useState("glyphs");
+  const [themeName, setThemeName] = useState("brown");
   const stateRef = useRef({ position });
   useEffect(() => {
     stateRef.current.position = position;
@@ -252,11 +254,44 @@ function App() {
         boardLabel="Demo chess position"
         animationMs={150}
         interaction={interaction}
-        presentation={presentation}
         annotations={showAnnotations ? mergedAnnotations : NO_ANNOTATIONS}
+        pieceSet={
+          pieceSetName === "glyphs" ? null : (pieceSets[pieceSetName] ?? null)
+        }
+        theme={boardThemes[themeName] ?? null}
+        presentation={presentation}
         {...(visibleLayers === undefined ? {} : { visibleLayers })}
       />
       <div className="controls">
+        <label>
+          Pieces{" "}
+          <select
+            data-testid="piece-set"
+            value={pieceSetName}
+            onChange={(event) => setPieceSetName(event.target.value)}
+          >
+            <option value="glyphs">Unicode glyphs</option>
+            {Object.keys(pieceSets).map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Board{" "}
+          <select
+            data-testid="board-theme"
+            value={themeName}
+            onChange={(event) => setThemeName(event.target.value)}
+          >
+            {Object.keys(boardThemes).map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
           onClick={() =>

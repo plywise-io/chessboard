@@ -173,10 +173,34 @@ The renderer exposes CSS custom properties on `.pw-board`:
 
 Animation duration is non-negative; `0` switches to instant updates. Direct drag positioning is unanimated by design.
 
+## Piece sets and board themes
+
+Pieces default to Unicode glyphs. Pass a `pieceSet` base URL (config, `set`, or React prop) to render any directory of `{w|b}{P,N,B,R,Q,K}.svg` files as images; `null` restores glyphs:
+
+```ts
+import { createChessboard, pieceSets } from "@plywise/chessboard";
+
+createChessboard(host, { position, pieceSet: pieceSets.rhosgfx });
+```
+
+Curated sets carry permissive licenses only (served via jsDelivr, or self-host the files and pass your own base URL):
+
+| Set | License | Look |
+| --- | --- | --- |
+| `pieceSets.rhosgfx` | CC0-1.0 | Public-domain, no attribution required |
+| `pieceSets.chessnut` | Apache-2.0 | Flat modern set, pinned upstream commit |
+| `pieceSets.fantasy` | MIT | Classical set by Maurizio Monge |
+| `pieceSets.spatial` | MIT | Geometric set by Maurizio Monge |
+| `pieceSets.celtic` | MIT | Celtic set by Maurizio Monge |
+
+Square colors come from the `theme` option (`{ light?, dark? }`) or the `--pw-light-square`/`--pw-dark-square` variables. `boardThemes` ships `brown` (default), `blue`, and `green`; `theme: null` restores the stylesheet defaults. Mark and annotation colors stay CSS-variable driven.
+
+Licensing note: the curated catalog is copyleft-free on purpose — rhosgfx is CC0, chessnut is Apache-2.0 (keep the upstream notice when you distribute the artwork), and fantasy, spatial, and celtic are MIT artwork by Maurizio Monge. Omitting `pieceSet` renders Unicode glyphs and involves no asset license. Licenses were verified against lila's `COPYING.md` and each upstream `LICENSE`.
+
 ## Lifecycle
 
 - `createChessboard(host, config)` returns a controller. The renderer validates inputs at the boundary and throws `TypeError` for invalid squares, pieces, colors, orientations, animation durations, interaction inputs, presentation inputs, annotations, layer visibility, and any other public value.
-- `set(update)` forwards controlled changes: position replacement, approved single-piece `move`, orientation flip, `ariaLabel`, `animationMs`, `interaction`, `presentation`, `annotations`, `visibleLayers`. Omitted fields are left unchanged. `interaction: null` disables interaction and clears transient pointer state.
+- `set(update)` forwards controlled changes: position replacement, approved single-piece `move`, orientation flip, `ariaLabel`, `animationMs`, `interaction`, `presentation`, `annotations`, `visibleLayers`, `pieceSet`, `theme`. Omitted fields are left unchanged; `pieceSet: null` restores glyphs, `theme: null` restores stylesheet square colors, and `interaction: null` disables interaction and clears transient pointer state.
 - `move(from, to)` is the caller-approved single-piece move. It preserves the moving DOM node, removes only the captured node, and does not animate if `animationMs` is `0`.
 - `destroy()` is idempotent and safe to call repeatedly. Calls to `set` or `move` after `destroy` throw `Error`. The DOM subtree is removed on destroy.
 

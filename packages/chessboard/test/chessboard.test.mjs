@@ -1418,3 +1418,62 @@ test("sub-threshold pointer movement keeps a click a click", async () => {
     { type: "select", square: "e2", origin: "pointer" },
   ]);
 });
+
+test("renders SVG piece sets and square themes with glyph fallback", () => {
+  const dom = new JSDOM('<div id="host"></div>');
+  const host = dom.window.document.querySelector("#host");
+  const position = new Map([
+    ["e2", { color: "white", role: "king" }],
+    ["e7", { color: "black", role: "pawn" }],
+  ]);
+  const base = "https://example.com/pieces/cburnett/";
+  const board = createChessboard(host, {
+    position,
+    animationMs: 0,
+    pieceSet: base,
+    theme: { light: "#dee3e6", dark: "#8ca2ad" },
+  });
+  const el = host.querySelector(".pw-board");
+  assert.equal(el.style.getPropertyValue("--pw-light-square"), "#dee3e6");
+  assert.equal(el.style.getPropertyValue("--pw-dark-square"), "#8ca2ad");
+
+  const king = host.querySelector('[data-square="e2"]');
+  const pawn = host.querySelector('[data-square="e7"]');
+  // JSDOM serializes url() values lowercased; compare case-insensitively.
+  assert.equal(
+    king.style.backgroundImage.toLowerCase(),
+    `url("${base}wk.svg")`,
+  );
+  assert.equal(
+    pawn.style.backgroundImage.toLowerCase(),
+    `url("${base}bp.svg")`,
+  );
+  assert.equal(king.textContent, "");
+
+  // An explicit null restores Unicode glyphs and repaints existing nodes.
+  board.set({ pieceSet: null });
+  assert.equal(king.style.backgroundImage, "");
+  assert.equal(king.textContent, "♔");
+  assert.equal(pawn.textContent, "♟");
+
+  // An explicit null restores the stylesheet's default square colors.
+  board.set({ theme: null });
+  assert.equal(el.style.getPropertyValue("--pw-light-square"), "");
+  assert.equal(el.style.getPropertyValue("--pw-dark-square"), "");
+});
+
+test("rejects invalid pieceSet and theme values", () => {
+  const dom = new JSDOM('<div id="host"></div>');
+  const host = dom.window.document.querySelector("#host");
+  const position = new Map([["a1", { color: "white", role: "rook" }]]);
+  assert.throws(
+    () => createChessboard(host, { position, pieceSet: "" }),
+    TypeError,
+  );
+  assert.throws(
+    () => createChessboard(host, { position, theme: { light: 5 } }),
+    TypeError,
+  );
+  const board = createChessboard(host, { position });
+  assert.throws(() => board.set({ pieceSet: 42 }), TypeError);
+});

@@ -441,3 +441,52 @@ test("a single-piece position change reuses the moving piece node", async () => 
   await act(() => root.unmount());
   assert.equal(host.childElementCount, 0);
 });
+
+test("forwards pieceSet and theme props into the imperative board", async () => {
+  const dom = new JSDOM('<div id="root"></div>');
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+  const [{ act, createElement }, { createRoot }, { Chessboard }] =
+    await Promise.all([
+      import("react"),
+      import("react-dom/client"),
+      import("../dist/index.js"),
+    ]);
+  const host = document.querySelector("#root");
+  const root = createRoot(host);
+  const position = new Map([["e2", { color: "white", role: "king" }]]);
+  const base = "https://example.com/pieces/merida/";
+
+  await act(() =>
+    root.render(
+      createElement(Chessboard, {
+        position,
+        pieceSet: base,
+        theme: { light: "#ffffdd", dark: "#86a666" },
+      }),
+    ),
+  );
+  const el = host.querySelector(".pw-board");
+  const king = host.querySelector('[data-square="e2"]');
+  // JSDOM serializes url() values lowercased; compare case-insensitively.
+  assert.equal(
+    king.style.backgroundImage.toLowerCase(),
+    `url("${base}wk.svg")`,
+  );
+  assert.equal(el.style.getPropertyValue("--pw-light-square"), "#ffffdd");
+  assert.equal(el.style.getPropertyValue("--pw-dark-square"), "#86a666");
+
+  // Switching back to glyphs keeps the same node but restores the symbol.
+  await act(() =>
+    root.render(createElement(Chessboard, { position, pieceSet: null })),
+  );
+  assert.equal(host.querySelector('[data-square="e2"]'), king);
+  assert.equal(king.style.backgroundImage, "");
+  assert.equal(king.textContent, "♔");
+
+  await act(() => root.unmount());
+  assert.equal(host.childElementCount, 0);
+});

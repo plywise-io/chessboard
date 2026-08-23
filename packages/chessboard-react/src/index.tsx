@@ -1,5 +1,6 @@
 import type {
   Annotation,
+  BoardTheme,
   Chessboard as ChessboardInstance,
   ChessboardUpdate,
   Color,
@@ -15,6 +16,7 @@ import { useEffect, useRef } from "react";
 export type {
   Annotation,
   ArrowAnnotation,
+  BoardTheme,
   ChessboardConfig,
   ChessboardUpdate,
   CircleAnnotation,
@@ -36,6 +38,7 @@ export type {
   Square,
 } from "@plywise/chessboard";
 
+export { boardThemes, pieceSets } from "@plywise/chessboard";
 export interface ChessboardProps
   extends Omit<ComponentPropsWithoutRef<"div">, "children"> {
   readonly position: Position;
@@ -46,6 +49,8 @@ export interface ChessboardProps
   readonly presentation?: Presentation;
   readonly annotations?: readonly Annotation[];
   readonly visibleLayers?: ReadonlySet<string>;
+  readonly pieceSet?: string | null;
+  readonly theme?: BoardTheme | null;
 }
 
 // Detect a single-piece move between two positions (a capture keeps the
@@ -92,6 +97,8 @@ export function Chessboard({
   presentation,
   annotations,
   visibleLayers,
+  pieceSet,
+  theme,
   ...hostProps
 }: ChessboardProps) {
   const host = useRef<HTMLDivElement>(null);
@@ -105,6 +112,8 @@ export function Chessboard({
     presentation,
     annotations,
     visibleLayers,
+    pieceSet,
+    theme,
   });
 
   useEffect(() => {
@@ -125,6 +134,8 @@ export function Chessboard({
       ...(initial.visibleLayers === undefined
         ? {}
         : { visibleLayers: initial.visibleLayers }),
+      ...(initial.pieceSet === undefined ? {} : { pieceSet: initial.pieceSet }),
+      ...(initial.theme === undefined ? {} : { theme: initial.theme }),
     });
     instance.current = board;
 
@@ -144,7 +155,9 @@ export function Chessboard({
       prior.interaction !== interaction ||
       prior.presentation !== presentation ||
       prior.annotations !== annotations ||
-      prior.visibleLayers !== visibleLayers;
+      prior.visibleLayers !== visibleLayers ||
+      prior.pieceSet !== pieceSet ||
+      prior.theme !== theme;
     previous.current = {
       position,
       orientation,
@@ -154,6 +167,8 @@ export function Chessboard({
       presentation,
       annotations,
       visibleLayers,
+      pieceSet,
+      theme,
     };
     if (!changed) return;
 
@@ -186,6 +201,8 @@ export function Chessboard({
       ...(prior.visibleLayers === visibleLayers
         ? {}
         : { visibleLayers: visibleLayers ?? null }),
+      ...(prior.pieceSet === pieceSet ? {} : { pieceSet }),
+      ...(prior.theme === theme ? {} : { theme }),
     };
     instance.current?.set(update);
   }, [
@@ -197,6 +214,8 @@ export function Chessboard({
     position,
     presentation,
     visibleLayers,
+    pieceSet,
+    theme,
   ]);
 
   return <div {...hostProps} ref={host} />;

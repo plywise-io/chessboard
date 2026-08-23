@@ -104,14 +104,21 @@ const PIECE_SET_CDN =
   "https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/";
 
 /**
- * Curated open-source piece sets, each a base URL of `{w|b}{P,N,B,R,Q,K}.svg`
- * files served from the lichess asset repository via jsDelivr.
- * Licenses: cburnett/merida GPL-2.0-or-later, rhosgfx CC0-1.0.
+ * Curated permissively licensed piece sets, each a base URL of
+ * `{w|b}{P,N,B,R,Q,K}.svg` files. rhosgfx is CC0 1.0; chessnut is
+ * Apache-2.0 (pinned commit — the repository has no tagged release);
+ * fantasy, spatial, and celtic are MIT artwork by Maurizio Monge served
+ * from the lichess asset mirror. Licenses verified against lila's
+ * COPYING.md and each upstream LICENSE file. Omitting `pieceSet` renders
+ * built-in Unicode glyphs and involves no asset license.
  */
 export const pieceSets: Readonly<Record<string, string>> = {
-  cburnett: `${PIECE_SET_CDN}cburnett/`,
-  merida: `${PIECE_SET_CDN}merida/`,
   rhosgfx: `${PIECE_SET_CDN}rhosgfx/`,
+  chessnut:
+    "https://cdn.jsdelivr.net/gh/LexLuengas/chessnut-pieces@2b8eaf14a31edad7e9deb53b1473e1d4857868a9/",
+  fantasy: `${PIECE_SET_CDN}fantasy/`,
+  spatial: `${PIECE_SET_CDN}spatial/`,
+  celtic: `${PIECE_SET_CDN}celtic/`,
 };
 
 export const boardThemes: Readonly<Record<string, BoardTheme>> = {
@@ -195,20 +202,21 @@ const symbols: Record<Color, Record<Role, string>> = {
   },
 };
 
+// Piece-set filenames use English chess notation, so the knight is N.
+const pieceLetters: Record<Role, string> = {
+  pawn: "P",
+  knight: "N",
+  bishop: "B",
+  rook: "R",
+  queen: "Q",
+  king: "K",
+};
+
 // A press must travel this far (CSS px) before it becomes a drag, so
 // jitter-sized movement inside a click never lifts the piece.
 // ponytail: fixed distance; expose a config knob only if a consumer
 // measurably needs a different activation feel.
 const dragActivationPx = 3;
-
-const roleLetters: Record<Role, string> = {
-  pawn: "p",
-  knight: "n",
-  bishop: "b",
-  rook: "r",
-  queen: "q",
-  king: "k",
-};
 
 type MarkKind =
   | "selected"
@@ -336,7 +344,7 @@ export function createChessboard(
 
   function repaintPieceImage(node: HTMLDivElement, piece: Piece): void {
     if (pieceSet) {
-      const url = `${pieceSet}${piece.color[0]}${roleLetters[piece.role]}.svg`;
+      const url = `${pieceSet}${piece.color[0]}${pieceLetters[piece.role]}.svg`;
       if (node.style.backgroundImage !== `url("${url}")`) {
         node.style.backgroundImage = `url("${url}")`;
       }
@@ -897,12 +905,12 @@ export function createChessboard(
       const nextVisibleLayers = hasVisibleLayers
         ? validateVisibleLayers(update.visibleLayers)
         : undefined;
-      const nextPieceSet =
-        update.pieceSet === undefined
-          ? undefined
-          : validatePieceSet(update.pieceSet);
-      const nextTheme =
-        update.theme === undefined ? undefined : validateTheme(update.theme);
+      const hasPieceSet = update.pieceSet !== undefined;
+      const nextPieceSet = hasPieceSet
+        ? validatePieceSet(update.pieceSet)
+        : undefined;
+      const hasTheme = update.theme !== undefined;
+      const nextTheme = hasTheme ? validateTheme(update.theme) : undefined;
 
       if (nextOrientation !== undefined) {
         clearDragVisual();
@@ -920,11 +928,11 @@ export function createChessboard(
           `${nextAnimation}ms`,
         );
       }
-      if (nextTheme !== undefined) {
+      if (hasTheme) {
         theme = nextTheme;
         applyTheme(theme);
       }
-      if (nextPieceSet !== undefined && nextPieceSet !== pieceSet) {
+      if (hasPieceSet && nextPieceSet !== pieceSet) {
         pieceSet = nextPieceSet;
         for (const [square, piece] of position) {
           const node = nodes.get(square);

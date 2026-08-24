@@ -1,5 +1,11 @@
 # @plywise/chessboard
 
+## 0.3.2
+
+### Patch Changes
+
+- adb32a2: Batch companion updates with a single-piece move, reconcile board marks once per update, and skip unchanged annotation DOM writes. Add WebKit-safe text-selection handling and a configurable cubic move easing.
+
 ## 0.3.1
 
 ### Patch Changes

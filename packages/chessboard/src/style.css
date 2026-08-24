@@ -2,6 +2,7 @@
   --pw-light-square: #f0d9b5;
   --pw-dark-square: #b58863;
   --pw-animation-duration: 150ms;
+  --pw-animation-easing: cubic-bezier(0.65, 0, 0.35, 1);
   --pw-selected-color: rgba(20, 85, 180, 0.55);
   --pw-destination-color: rgba(20, 85, 180, 0.45);
   --pw-capture-color: rgba(20, 85, 180, 0.6);
@@ -52,7 +53,7 @@
    * --pw-rank animates the glide. A zero --pw-animation-duration is
    * instant; a newer update retargets the running transition. Dragging
    * suppresses this inline. */
-  transition: transform var(--pw-animation-duration) ease;
+  transition: transform var(--pw-animation-duration) var(--pw-animation-easing);
 }
 
 .pw-piece[data-color="black"] {

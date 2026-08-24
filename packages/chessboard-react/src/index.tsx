@@ -22,6 +22,7 @@ export type {
   BoardTheme,
   BoardThemeName,
   ChessboardConfig,
+  ChessboardMoveUpdate,
   ChessboardUpdate,
   CircleAnnotation,
   ClearEvent,
@@ -179,9 +180,6 @@ export function Chessboard({
       prior.position === position
         ? undefined
         : detectMove(prior.position, position);
-    if (singlePieceMove) {
-      instance.current?.move(singlePieceMove.from, singlePieceMove.to);
-    }
 
     const update: ChessboardUpdate = {
       ...(singlePieceMove || prior.position === position ? {} : { position }),
@@ -204,7 +202,20 @@ export function Chessboard({
       ...(prior.pieceSet === pieceSet ? {} : { pieceSet }),
       ...(prior.theme === theme ? {} : { theme }),
     };
-    if (Object.keys(update).length > 0) instance.current?.set(update);
+    if (singlePieceMove) {
+      const { position: _position, ...companion } = update;
+      if (Object.keys(companion).length > 0) {
+        instance.current?.move(
+          singlePieceMove.from,
+          singlePieceMove.to,
+          companion,
+        );
+      } else {
+        instance.current?.move(singlePieceMove.from, singlePieceMove.to);
+      }
+    } else if (Object.keys(update).length > 0) {
+      instance.current?.set(update);
+    }
   }, [
     animationMs,
     coordinates,

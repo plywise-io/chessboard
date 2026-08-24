@@ -2132,3 +2132,55 @@ test("pointercancel removes the drag ghost and drop-target highlight", async () 
   assert.equal(host.querySelector(".pw-piece-ghost"), null);
   assert.equal(host.querySelector(".pw-mark-drag-target"), null);
 });
+
+test("move applies companion presentation atomically", () => {
+  const { host, board } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+  );
+  const movingNode = host.querySelector('[data-square="e2"]');
+
+  board.move("e2", "e4", {
+    presentation: { lastMove: { from: "e2", to: "e4" } },
+  });
+
+  assert.equal(host.querySelector('[data-square="e4"]'), movingNode);
+  assert.equal(
+    host.querySelector('[data-mark="last-move-from"]').dataset.square,
+    "e2",
+  );
+  assert.equal(
+    host.querySelector('[data-mark="last-move-to"]').dataset.square,
+    "e4",
+  );
+  assert.throws(
+    () =>
+      board.move("e4", "e5", {
+        position: new Map(),
+      }),
+    /cannot include position/,
+  );
+});
+
+test("unchanged annotations do not rewrite their SVG node", () => {
+  const annotation = {
+    id: "engine",
+    kind: "arrow",
+    from: "e2",
+    to: "e4",
+    layer: "engine",
+  };
+  const { host, board } = makeBoard(new Map(), {
+    annotations: [annotation],
+  });
+  const node = host.querySelector('[data-annotation-id="engine"]');
+  let writes = 0;
+  const setAttribute = node.setAttribute.bind(node);
+  node.setAttribute = (...args) => {
+    writes += 1;
+    return setAttribute(...args);
+  };
+
+  board.set({ annotations: [{ ...annotation }] });
+
+  assert.equal(writes, 0);
+});

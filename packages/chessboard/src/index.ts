@@ -217,9 +217,11 @@ export interface ChessboardUpdate {
   readonly visibleLayers?: ReadonlySet<string> | null;
 }
 
+export type ChessboardMoveUpdate = Omit<ChessboardUpdate, "position">;
+
 export interface Chessboard {
   set(update: ChessboardUpdate): void;
-  move(from: Square, to: Square): void;
+  move(from: Square, to: Square, update?: ChessboardMoveUpdate): void;
   destroy(): void;
 }
 
@@ -402,6 +404,12 @@ export function createChessboard(
   const nodes = new Map<Square, HTMLDivElement>();
   const markNodes = new Map<string, HTMLDivElement>();
   const annotationNodes = new Map<string, SVGElement>();
+  // Last canonicalized payload written to each annotation node, so we can
+  // skip redundant `data-*` / stroke / SVG geometry writes when nothing
+  // changed. Entries are removed alongside their node on teardown.
+  const annotationPayloads = new Map<string, Annotation>();
+  const annotationOrientations = new Map<string, Color>();
+
   const annotationLayer = host.ownerDocument.createElementNS(
     "http://www.w3.org/2000/svg",
     "svg",
@@ -474,6 +482,13 @@ export function createChessboard(
     place(node, square, orientation);
   }
 
+  function annotationGeometryKey(annotation: Annotation): string {
+    if (annotation.kind === "arrow") {
+      return `a:${annotation.from},${annotation.to}`;
+    }
+    return `c:${annotation.square}`;
+  }
+
   function paintAnnotation(node: SVGElement, annotation: Annotation): void {
     if (annotation.kind === "arrow") {
       const from = squareToCoord(annotation.from, orientation);
@@ -508,6 +523,8 @@ export function createChessboard(
       tag,
     ) as SVGElement;
     applyAnnotationDataAttrs(node, annotation);
+    annotationPayloads.set(annotation.id, annotation);
+    annotationOrientations.set(annotation.id, orientation);
     return node;
   }
 
@@ -515,17 +532,35 @@ export function createChessboard(
     node: SVGElement,
     annotation: Annotation,
   ): void {
-    node.setAttribute("data-annotation-id", annotation.id);
-    node.setAttribute("data-annotation-kind", annotation.kind);
-    node.setAttribute("data-annotation-layer", annotation.layer);
+    if (node.getAttribute("data-annotation-id") !== annotation.id) {
+      node.setAttribute("data-annotation-id", annotation.id);
+    }
+    if (node.getAttribute("data-annotation-kind") !== annotation.kind) {
+      node.setAttribute("data-annotation-kind", annotation.kind);
+    }
+    if (node.getAttribute("data-annotation-layer") !== annotation.layer) {
+      node.setAttribute("data-annotation-layer", annotation.layer);
+    }
     // Inline style rather than the SVG presentation attribute: the
     // stylesheet's `.pw-annotations path|circle { stroke }` rule would
     // override a presentation attribute anyway.
-    if (annotation.color !== undefined) {
-      node.style.stroke = annotation.color;
-    } else {
-      node.style.removeProperty("stroke");
+    const stroke = annotation.color ?? "";
+    if (node.style.stroke !== stroke) {
+      if (annotation.color !== undefined) {
+        node.style.stroke = annotation.color;
+      } else {
+        node.style.removeProperty("stroke");
+      }
     }
+  }
+
+  function annotationsMatch(left: Annotation, right: Annotation): boolean {
+    return (
+      left.kind === right.kind &&
+      left.layer === right.layer &&
+      left.color === right.color &&
+      annotationGeometryKey(left) === annotationGeometryKey(right)
+    );
   }
 
   function renderAnnotations(next: readonly Annotation[]): void {
@@ -533,30 +568,47 @@ export function createChessboard(
     for (const annotation of next) {
       seen.add(annotation.id);
       let node = annotationNodes.get(annotation.id);
-      if (
-        node &&
-        node.getAttribute("data-annotation-kind") !== annotation.kind
-      ) {
+      const cached = annotationPayloads.get(annotation.id);
+      const orientationChanged =
+        annotationOrientations.get(annotation.id) !== orientation;
+      if (node && cached && cached.kind !== annotation.kind) {
         node.remove();
         annotationNodes.delete(annotation.id);
+        annotationPayloads.delete(annotation.id);
+        annotationOrientations.delete(annotation.id);
         node = undefined;
       }
       if (!node) {
         node = createAnnotationNode(annotation);
         annotationLayer.append(node);
         annotationNodes.set(annotation.id, node);
-      } else {
-        applyAnnotationDataAttrs(node, annotation);
+        paintAnnotation(node, annotation);
+        continue;
       }
-      paintAnnotation(node, annotation);
+      const payloadChanged = !cached || !annotationsMatch(cached, annotation);
+      if (payloadChanged) {
+        applyAnnotationDataAttrs(node, annotation);
+        annotationPayloads.set(annotation.id, annotation);
+      }
+      if (
+        orientationChanged ||
+        !cached ||
+        annotationGeometryKey(cached) !== annotationGeometryKey(annotation)
+      ) {
+        paintAnnotation(node, annotation);
+      }
+      annotationOrientations.set(annotation.id, orientation);
     }
     for (const [id, node] of annotationNodes) {
       if (!seen.has(id)) {
         node.remove();
         annotationNodes.delete(id);
+        annotationPayloads.delete(id);
+        annotationOrientations.delete(id);
       }
     }
   }
+
   // Slice 05 visibility filter. Opaque layer names: `undefined` means
   // every layer renders; an explicit empty set hides every annotation
   // while leaving annotation state intact for later re-enablement.
@@ -577,45 +629,17 @@ export function createChessboard(
   // move — the same guarantee `move()` gives the caller-approved path.
   // A node whose piece stays on its square is untouched; unmatched nodes
   // relocate to a square needing the same piece type; the rest go away.
-  function renderPosition(next: Position): void {
+  function renderPosition(next: Position, deferMarks = false): void {
+    // Validate first so callers see the same atomic throw as the
+    // unified update path; mutations only happen on success.
     const checked = validatePosition(next);
-    const nextNodes = new Map<Square, HTMLDivElement>();
-    const pool = new Map<string, HTMLDivElement[]>();
-    for (const [square, node] of nodes) {
-      const piece = checked.get(square);
-      if (
-        piece &&
-        node.dataset.color === piece.color &&
-        node.dataset.role === piece.role
-      ) {
-        nextNodes.set(square, node);
-      } else {
-        const pieceKey = `${node.dataset.color}${node.dataset.role}`;
-        const bucket = pool.get(pieceKey);
-        if (bucket === undefined) pool.set(pieceKey, [node]);
-        else bucket.push(node);
-      }
-    }
-    for (const [square, piece] of checked) {
-      if (nextNodes.has(square)) continue;
-      const pieceKey = `${piece.color}${piece.role}`;
-      let node = pool.get(pieceKey)?.pop();
-      if (node === undefined) {
-        node = host.ownerDocument.createElement("div");
-        node.className = "pw-piece";
-        node.setAttribute("aria-hidden", "true");
-        board.append(node);
-      }
-      paintPiece(node, square, piece);
-      nextNodes.set(square, node);
-    }
-    for (const bucket of pool.values()) {
-      for (const leftover of bucket) leftover.remove();
-    }
-    nodes.clear();
-    for (const [square, node] of nextNodes) nodes.set(square, node);
     position = checked;
-    renderMarks();
+    reconcilePieces();
+    // Direct callers (initial render, `move()` with no companion update)
+    // rely on the synchronous mark reconciliation. A batched update can
+    // defer until every mark source has been applied, so a single
+    // `renderMarks()` covers all of them.
+    if (!deferMarks) renderMarks();
   }
 
   function renderMarks(): void {
@@ -1106,122 +1130,209 @@ export function createChessboard(
   renderVisibleAnnotations(annotations);
   renderCoordinates();
 
+  // Compute the post-update render plan without touching state. Each
+  // boolean is a render phase that `set()` and `move()` execute at most
+  // once after applying the supplied state, so a multi-field update
+  // collapses into a single mark reconciliation and a single annotation
+  // pass. `rejectPosition` lets `move()` reject a runtime-injected
+  // `position` even though the type omits it.
+  type UpdatePlan = {
+    orientationChanged: boolean;
+    coordinatesChanged: boolean;
+    pieceSetChanged: boolean;
+    interactionChanged: boolean;
+    presentationChanged: boolean;
+    positionChanged: boolean;
+    annotationsChanged: boolean;
+    visibleLayersChanged: boolean;
+    marksDirty: boolean;
+    annotationsDirty: boolean;
+  };
+
+  function planUpdate(
+    update: ChessboardUpdate,
+    rejectPosition: boolean,
+  ): UpdatePlan {
+    if (rejectPosition && "position" in update) {
+      throw new TypeError("move() companion update cannot include position");
+    }
+    return {
+      orientationChanged: update.orientation !== undefined,
+      coordinatesChanged: update.coordinates !== undefined,
+      pieceSetChanged:
+        update.pieceSet !== undefined && update.pieceSet !== pieceSet,
+      interactionChanged: update.interaction !== undefined,
+      presentationChanged: update.presentation !== undefined,
+      positionChanged: false,
+      annotationsChanged: update.annotations !== undefined,
+      visibleLayersChanged: update.visibleLayers !== undefined,
+      marksDirty:
+        update.orientation !== undefined ||
+        update.interaction !== undefined ||
+        update.presentation !== undefined ||
+        update.position !== undefined,
+      annotationsDirty:
+        update.orientation !== undefined ||
+        update.annotations !== undefined ||
+        update.visibleLayers !== undefined,
+    };
+  }
+
+  // Mutate state for a planned update. Performs every render-phase
+  // assignment but no DOM work; callers run render phases from the plan.
+  function applyUpdate(
+    update: ChessboardUpdate | ChessboardMoveUpdate,
+    plan: UpdatePlan,
+    nextPosition: Position | undefined,
+  ): void {
+    if (plan.orientationChanged) {
+      clearDragVisual();
+      clearDrawVisual();
+      orientation = validateColor(update.orientation as Color, "orientation");
+    }
+    if (update.ariaLabel !== undefined) {
+      board.setAttribute("aria-label", update.ariaLabel);
+    }
+    if (update.animationMs !== undefined) {
+      board.style.setProperty(
+        "--pw-animation-duration",
+        `${validateAnimation(update.animationMs)}ms`,
+      );
+    }
+    if (plan.coordinatesChanged) {
+      coordinates = validateBoolean(
+        update.coordinates as boolean,
+        "coordinates",
+      );
+    }
+    if (update.theme !== undefined) {
+      theme = validateTheme(update.theme);
+      applyTheme(theme);
+    }
+    if (plan.pieceSetChanged) {
+      pieceSet = validatePieceSet(update.pieceSet);
+    }
+    if (plan.interactionChanged) {
+      if (update.interaction === null) {
+        clearDragVisual();
+        clearDrawVisual();
+        interaction = null;
+        destinations = new Map();
+      } else {
+        interaction = validateInteraction(update.interaction as Interaction);
+        destinations = interaction.destinations;
+        if (drag && !destinations.has(drag.source)) clearDragVisual();
+      }
+    }
+    if (plan.presentationChanged) {
+      const next = validatePresentation(update.presentation as Presentation);
+      selected = next.selected;
+      lastMove = next.lastMove;
+      checkedSquare = next.checked;
+    }
+    if (nextPosition !== undefined) {
+      const next = validatePosition(nextPosition);
+      // Drop an in-flight drag whose source square is no longer in the
+      // new position. Matches the legacy behavior of `set({position})`
+      // (unconditional clear) and `move()` (clear only when the moved
+      // square equals the drag source) under one rule.
+      if (drag !== null && !next.has(drag.source)) clearDragVisual();
+      position = next;
+    }
+    if (plan.annotationsChanged) {
+      annotations = validateAnnotations(update.annotations);
+    }
+    if (plan.visibleLayersChanged) {
+      visibleLayers = validateVisibleLayers(update.visibleLayers);
+    }
+  }
+
+  // Single-pass render from a plan: each phase executes at most once,
+  // and a final `renderMarks()` covers every source that affects marks.
+  function renderFromPlan(plan: UpdatePlan): void {
+    if (plan.orientationChanged) {
+      for (const [square, node] of nodes) place(node, square, orientation);
+    }
+    if (plan.orientationChanged || plan.coordinatesChanged) {
+      renderCoordinates();
+    }
+    if (plan.pieceSetChanged) {
+      for (const [square, piece] of position) {
+        const node = nodes.get(square);
+        if (node) repaintPieceImage(node, piece);
+      }
+    }
+    if (plan.positionChanged) {
+      // `applyUpdate` already mutated `position`; reconcile pieces now
+      // so the deferred mark pass observes the post-render map.
+      reconcilePieces();
+    }
+    if (plan.marksDirty) renderMarks();
+    if (plan.annotationsDirty) renderVisibleAnnotations(annotations);
+  }
+
+  // Position-rendering core, reused by `renderPosition` and the unified
+  // update path so that piece identity and node reuse behave identically
+  // whether triggered by `move()`/`set({position})` or a batched update.
+  function reconcilePieces(): void {
+    const checked = position;
+    const nextNodes = new Map<Square, HTMLDivElement>();
+    const pool = new Map<string, HTMLDivElement[]>();
+    for (const [square, node] of nodes) {
+      const piece = checked.get(square);
+      if (
+        piece &&
+        node.dataset.color === piece.color &&
+        node.dataset.role === piece.role
+      ) {
+        nextNodes.set(square, node);
+      } else {
+        const pieceKey = `${node.dataset.color}${node.dataset.role}`;
+        const bucket = pool.get(pieceKey);
+        if (bucket === undefined) pool.set(pieceKey, [node]);
+        else bucket.push(node);
+      }
+    }
+    for (const [square, piece] of checked) {
+      if (nextNodes.has(square)) continue;
+      const pieceKey = `${piece.color}${piece.role}`;
+      let node = pool.get(pieceKey)?.pop();
+      if (node === undefined) {
+        node = host.ownerDocument.createElement("div");
+        node.className = "pw-piece";
+        node.setAttribute("aria-hidden", "true");
+        board.append(node);
+      }
+      paintPiece(node, square, piece);
+      nextNodes.set(square, node);
+    }
+    for (const bucket of pool.values()) {
+      for (const leftover of bucket) leftover.remove();
+    }
+    nodes.clear();
+    for (const [square, node] of nextNodes) nodes.set(square, node);
+  }
+
   return {
     set(update): void {
       ensureAlive(destroyed);
-
-      const nextOrientation =
-        update.orientation === undefined
-          ? undefined
-          : validateColor(update.orientation, "orientation");
-      const nextAnimation =
-        update.animationMs === undefined
-          ? undefined
-          : validateAnimation(update.animationMs);
-      const nextCoordinates =
-        update.coordinates === undefined
-          ? undefined
-          : validateBoolean(update.coordinates, "coordinates");
-      const nextInteraction =
-        update.interaction === undefined
-          ? undefined
-          : update.interaction === null
-            ? null
-            : validateInteraction(update.interaction);
-      const nextPresentation =
-        update.presentation === undefined
-          ? undefined
-          : validatePresentation(update.presentation);
-      const nextPosition =
-        update.position === undefined
-          ? undefined
-          : validatePosition(update.position);
-      const nextAnnotations =
-        update.annotations === undefined
-          ? undefined
-          : validateAnnotations(update.annotations);
-      const hasVisibleLayers = update.visibleLayers !== undefined;
-      const nextVisibleLayers = hasVisibleLayers
-        ? validateVisibleLayers(update.visibleLayers)
-        : undefined;
-      const hasPieceSet = update.pieceSet !== undefined;
-      const nextPieceSet = hasPieceSet
-        ? validatePieceSet(update.pieceSet)
-        : undefined;
-      const hasTheme = update.theme !== undefined;
-      const nextTheme = hasTheme ? validateTheme(update.theme) : undefined;
-
-      if (nextOrientation !== undefined) {
-        clearDragVisual();
-        clearDrawVisual();
-        orientation = nextOrientation;
-        for (const [square, node] of nodes) place(node, square, orientation);
-        renderMarks();
-        renderCoordinates();
-      }
-      if (update.ariaLabel !== undefined) {
-        board.setAttribute("aria-label", update.ariaLabel);
-      }
-      if (nextAnimation !== undefined) {
-        board.style.setProperty(
-          "--pw-animation-duration",
-          `${nextAnimation}ms`,
-        );
-      }
-      if (nextCoordinates !== undefined) {
-        coordinates = nextCoordinates;
-        renderCoordinates();
-      }
-      if (hasTheme) {
-        theme = nextTheme;
-        applyTheme(theme);
-      }
-      if (hasPieceSet && nextPieceSet !== pieceSet) {
-        pieceSet = nextPieceSet;
-        for (const [square, piece] of position) {
-          const node = nodes.get(square);
-          if (node) repaintPieceImage(node, piece);
-        }
-      }
-      if (nextInteraction !== undefined) {
-        if (nextInteraction === null) {
-          clearDragVisual();
-          clearDrawVisual();
-          interaction = null;
-          destinations = new Map();
-        } else {
-          interaction = nextInteraction;
-          destinations = interaction.destinations;
-          if (drag && !destinations.has(drag.source)) clearDragVisual();
-        }
-        renderMarks();
-      }
-      if (nextPresentation !== undefined) {
-        selected = nextPresentation.selected;
-        lastMove = nextPresentation.lastMove;
-        checkedSquare = nextPresentation.checked;
-        renderMarks();
-      }
-      if (nextPosition !== undefined) {
-        clearDragVisual();
-        renderPosition(nextPosition);
-      }
-      if (nextAnnotations !== undefined) annotations = nextAnnotations;
-      if (hasVisibleLayers) visibleLayers = nextVisibleLayers;
-      if (
-        nextOrientation !== undefined ||
-        nextAnnotations !== undefined ||
-        hasVisibleLayers
-      ) {
-        renderVisibleAnnotations(annotations);
-      }
+      const plan = planUpdate(update, false);
+      applyUpdate(update, plan, update.position);
+      plan.positionChanged = update.position !== undefined;
+      renderFromPlan(plan);
     },
 
-    move(from, to): void {
+    move(from, to, update): void {
       ensureAlive(destroyed);
       validateSquare(from);
       validateSquare(to);
-      if (from === to) return;
+      if (from === to) {
+        if (update === undefined) return;
+        const plan = planUpdate(update, true);
+        applyUpdate(update, plan, undefined);
+        renderFromPlan(plan);
+        return;
+      }
 
       const piece = position.get(from);
       const node = nodes.get(from);
@@ -1230,8 +1341,20 @@ export function createChessboard(
       const next = new Map(position);
       next.delete(from);
       next.set(to, piece);
-      if (drag?.source === from) clearDragVisual();
-      renderPosition(next);
+
+      if (update === undefined) {
+        // Standalone two-arg behavior: synchronous render with immediate
+        // mark reconciliation so callers see a fully-rendered board.
+        if (drag?.source === from) clearDragVisual();
+        renderPosition(next);
+        return;
+      }
+
+      const plan = planUpdate(update, true);
+      plan.positionChanged = true;
+      plan.marksDirty = true;
+      applyUpdate(update, plan, next);
+      renderFromPlan(plan);
     },
 
     destroy(): void {
@@ -1248,8 +1371,9 @@ export function createChessboard(
       nodes.clear();
       for (const mark of markNodes.values()) mark.remove();
       markNodes.clear();
-      for (const node of annotationNodes.values()) node.remove();
       annotationNodes.clear();
+      annotationPayloads.clear();
+      annotationOrientations.clear();
       board.remove();
     },
   };

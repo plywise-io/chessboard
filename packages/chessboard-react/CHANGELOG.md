@@ -1,5 +1,13 @@
 # @plywise/chessboard-react
 
+## 0.2.1
+
+### Patch Changes
+
+- adb32a2: Batch companion updates with a single-piece move, reconcile board marks once per update, and skip unchanged annotation DOM writes. Add WebKit-safe text-selection handling and a configurable cubic move easing.
+- Updated dependencies [adb32a2]
+  - @plywise/chessboard@0.3.2
+
 ## 0.2.0
 
 ### Minor Changes

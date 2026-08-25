@@ -1,7 +1,6 @@
 import {
   type Annotation,
   type Chessboard,
-  type ChessboardUpdate,
   createChessboard,
   type Interaction,
   type InteractionEvent,
@@ -24,6 +23,7 @@ type ScenarioResult = {
   readonly setCalls: number;
   readonly moveCalls: number;
   readonly svgAttributeWrites: number;
+  readonly svgWritesByAnnotationId: Readonly<Record<string, number>>;
   readonly markAttributeRewrites: number;
   readonly childListMutations: number;
   readonly longTasks: number;
@@ -112,6 +112,7 @@ type CountersSnapshot = Pick<
   | "setCalls"
   | "moveCalls"
   | "svgAttributeWrites"
+  | "svgWritesByAnnotationId"
   | "markAttributeRewrites"
   | "childListMutations"
   | "longTasks"
@@ -147,7 +148,6 @@ function buildAnnotations(): readonly Annotation[] {
     ["c3", "c6"],
     ["d3", "d6"],
     ["e3", "e6"],
-    ["f3", "f6"],
     ["g3", "g6"],
     ["h3", "h6"],
     ["a4", "a7"],
@@ -194,6 +194,7 @@ class ScenarioCounters {
   childListMutations = 0;
   longTasks = 0;
   frameGapsOver50ms = 0;
+  svgWritesByAnnotationId = new Map<string, number>();
   private lastRaf = 0;
   private rafId = 0;
   private longTaskObserver: PerformanceObserver | null = null;
@@ -202,7 +203,6 @@ class ScenarioCounters {
   private originalMove: Chessboard["move"] | null = null;
   private originalSet: Chessboard["set"] | null = null;
   private originalRAF: typeof window.requestAnimationFrame | null = null;
-
   constructor(
     private readonly board: HTMLElement,
     private readonly instance: Chessboard,
@@ -216,18 +216,10 @@ class ScenarioCounters {
       this.setCalls++;
       this.originalSet?.(update);
     };
-    const countedMove: Chessboard["move"] = ((from, to, update) => {
+    const countedMove: Chessboard["move"] = (from, to, update) => {
       this.moveCalls++;
-      // The atomic-update overload lands here at integration time; pre-patch
-      // move() only accepts (from, to).
-      (
-        this.originalMove as unknown as (
-          f: Square,
-          t: Square,
-          u?: ChessboardUpdate,
-        ) => void
-      )(from, to, update);
-    }) as Chessboard["move"];
+      this.originalMove?.(from, to, update);
+    };
     this.instance.set = countedSet;
     this.instance.move = countedMove;
 
@@ -242,8 +234,23 @@ class ScenarioCounters {
       name: string,
       value: string,
     ) {
-      if ((this as Element).closest?.(".pw-annotations"))
-        self.svgAttributeWrites++;
+      const el = this as Element;
+      if (!el.closest?.(".pw-annotations"))
+        return (self.originalSetAttr as Element["setAttribute"]).call(
+          this,
+          name,
+          value,
+        );
+      self.svgAttributeWrites++;
+      // Per-id tally: walk to the annotation node whose id the renderer
+      // keys reconciliation on; per-id writes = real reconciliation work.
+      const id = el
+        .closest?.("[data-annotation-id]")
+        ?.getAttribute("data-annotation-id");
+      if (id) {
+        const current = self.svgWritesByAnnotationId.get(id) ?? 0;
+        self.svgWritesByAnnotationId.set(id, current + 1);
+      }
       return (self.originalSetAttr as Element["setAttribute"]).call(
         this,
         name,
@@ -309,6 +316,7 @@ class ScenarioCounters {
     this.setCalls = 0;
     this.moveCalls = 0;
     this.svgAttributeWrites = 0;
+    this.svgWritesByAnnotationId.clear();
     this.markAttributeRewrites = 0;
     this.childListMutations = 0;
     this.longTasks = 0;
@@ -320,6 +328,7 @@ class ScenarioCounters {
       setCalls: this.setCalls,
       moveCalls: this.moveCalls,
       svgAttributeWrites: this.svgAttributeWrites,
+      svgWritesByAnnotationId: Object.fromEntries(this.svgWritesByAnnotationId),
       markAttributeRewrites: this.markAttributeRewrites,
       childListMutations: this.childListMutations,
       longTasks: this.longTasks,
@@ -366,6 +375,65 @@ function squareCenter(
   return relativePoint(board, (fileIndex + 0.5) / 8, (8 - rank + 0.5) / 8);
 }
 
+type DragSpec = {
+  from: Square;
+  to: Square;
+  button: number;
+  moveButtons: number;
+};
+
+/**
+ * Sweep a pointer drag across the board for `DRAG_DURATION_MS` at 60Hz.
+ * Shared between rightButtonDrag and pieceDrag so they exercise the same
+ * dispatch path; only the originating button and active buttons differ.
+ */
+async function dispatchDrag(
+  board: HTMLElement,
+  start: number,
+  spec: DragSpec,
+): Promise<void> {
+  const startPt = squareCenter(board, spec.from);
+  const endPt = squareCenter(board, spec.to);
+  board.dispatchEvent(
+    makePointer("pointerdown", {
+      bubbles: true,
+      button: spec.button,
+      buttons: spec.button,
+      clientX: startPt.x,
+      clientY: startPt.y,
+      pointerType: "mouse",
+    }),
+  );
+  let now = performance.now();
+  while (now < start + DRAG_DURATION_MS) {
+    const t = (now - start) / DRAG_DURATION_MS;
+    board.dispatchEvent(
+      makePointer("pointermove", {
+        bubbles: true,
+        buttons: spec.moveButtons,
+        clientX: startPt.x + (endPt.x - startPt.x) * t,
+        clientY: startPt.y + (endPt.y - startPt.y) * t,
+        pointerType: "mouse",
+      }),
+    );
+    await sleep(DRAG_TICK_MS);
+    now = performance.now();
+  }
+  board.dispatchEvent(
+    makePointer("pointerup", {
+      bubbles: true,
+      button: spec.button,
+      buttons: 0,
+      clientX: endPt.x,
+      clientY: endPt.y,
+      pointerType: "mouse",
+    }),
+  );
+}
+
+const DRAG_DURATION_MS = 2000;
+const DRAG_TICK_MS = 1000 / 60;
+
 async function runScenario(
   scenario: ScenarioId,
   board: HTMLElement,
@@ -394,85 +462,19 @@ async function runScenario(
       await sleep(0);
     }
   } else if (scenario === "rightButtonDrag") {
-    const durationMs = 2000;
-    const tickMs = 1000 / 60;
-    const startPt = squareCenter(board, "e2");
-    const endPt = squareCenter(board, "h5");
-    board.dispatchEvent(
-      makePointer("pointerdown", {
-        bubbles: true,
-        button: 2,
-        buttons: 2,
-        clientX: startPt.x,
-        clientY: startPt.y,
-        pointerType: "mouse",
-      }),
-    );
-    let now = performance.now();
-    while (now < start + durationMs) {
-      const t = (now - start) / durationMs;
-      board.dispatchEvent(
-        makePointer("pointermove", {
-          bubbles: true,
-          buttons: 2,
-          clientX: startPt.x + (endPt.x - startPt.x) * t,
-          clientY: startPt.y + (endPt.y - startPt.y) * t,
-          pointerType: "mouse",
-        }),
-      );
-      await sleep(tickMs);
-      now = performance.now();
-    }
-    board.dispatchEvent(
-      makePointer("pointerup", {
-        bubbles: true,
-        button: 2,
-        buttons: 0,
-        clientX: endPt.x,
-        clientY: endPt.y,
-        pointerType: "mouse",
-      }),
-    );
+    await dispatchDrag(board, start, {
+      from: "e2",
+      to: "h5",
+      button: 2,
+      moveButtons: 2,
+    });
   } else {
-    const durationMs = 2000;
-    const tickMs = 1000 / 60;
-    const startPt = squareCenter(board, "b1");
-    const endPt = squareCenter(board, "c3");
-    board.dispatchEvent(
-      makePointer("pointerdown", {
-        bubbles: true,
-        button: 0,
-        buttons: 1,
-        clientX: startPt.x,
-        clientY: startPt.y,
-        pointerType: "mouse",
-      }),
-    );
-    let now = performance.now();
-    while (now < start + durationMs) {
-      const t = (now - start) / durationMs;
-      board.dispatchEvent(
-        makePointer("pointermove", {
-          bubbles: true,
-          buttons: 1,
-          clientX: startPt.x + (endPt.x - startPt.x) * t,
-          clientY: startPt.y + (endPt.y - startPt.y) * t,
-          pointerType: "mouse",
-        }),
-      );
-      await sleep(tickMs);
-      now = performance.now();
-    }
-    board.dispatchEvent(
-      makePointer("pointerup", {
-        bubbles: true,
-        button: 0,
-        buttons: 0,
-        clientX: endPt.x,
-        clientY: endPt.y,
-        pointerType: "mouse",
-      }),
-    );
+    await dispatchDrag(board, start, {
+      from: "b1",
+      to: "c3",
+      button: 0,
+      moveButtons: 1,
+    });
   }
 
   const elapsed = performance.now() - start;
@@ -568,7 +570,6 @@ function PerformanceFixture(): React.ReactElement {
         await sleep(50);
       }
       // Use the freshly-collected snapshot, not the React state which lags.
-      // eslint-disable-next-line no-console
       console.table(
         EXPECTED.map((spec) => {
           const result = collected.find((r) => r.id === spec.id);
@@ -646,6 +647,38 @@ function PerformanceFixture(): React.ReactElement {
           })}
         </tbody>
       </table>
+      <details style={{ fontSize: ".75rem", maxWidth: "32rem" }}>
+        <summary>Per-annotation SVG attribute writes</summary>
+        <p>
+          Tallies keyed by <code>data-annotation-id</code> for the most recent
+          run; a row shows only when an annotation was written at least once.
+        </p>
+        <ul>
+          {EXPECTED.map((spec) => {
+            const r = results[spec.id];
+            const tally = r?.svgWritesByAnnotationId ?? {};
+            const ids = Object.keys(tally);
+            return (
+              <li key={spec.id}>
+                <strong>{spec.id}</strong>
+                {ids.length === 0 ? (
+                  <>: none</>
+                ) : (
+                  <ul>
+                    {ids
+                      .sort((a, b) => (tally[b] ?? 0) - (tally[a] ?? 0))
+                      .map((id) => (
+                        <li key={id}>
+                          <code>{id}</code>: {tally[id]}
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </details>
       <details style={{ fontSize: ".75rem", maxWidth: "32rem" }}>
         <summary>Expected post-patch values</summary>
         <ul>

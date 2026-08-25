@@ -193,6 +193,7 @@ The renderer exposes CSS custom properties on `.pw-board`:
 | `--pw-light-square` | Light square color |
 | `--pw-dark-square` | Dark square color |
 | `--pw-animation-duration` | Transition duration for piece movement |
+| `--pw-animation-easing` | Easing curve for piece movement transitions |
 | `--pw-coordinate-color` | Coordinate label color for both square parities |
 | `--pw-coordinate-on-light` | Coordinate label color on light squares |
 | `--pw-coordinate-on-dark` | Coordinate label color on dark squares |

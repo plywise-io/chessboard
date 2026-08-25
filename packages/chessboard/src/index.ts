@@ -445,8 +445,8 @@ export function createChessboard(
   const view = host.ownerDocument.defaultView;
   const nodes = new Map<Square, HTMLDivElement>();
   const markNodes = new Map<string, HTMLDivElement>();
-  const annotationNodes = new Map<string, SVGElement>();
-  const annotationRenderKeys = new Map<string, string>();
+  type RenderKeyedAnnotation = SVGElement & { __pwRenderKey?: string };
+  const annotationNodes = new Map<string, RenderKeyedAnnotation>();
   const annotationLayer = host.ownerDocument.createElementNS(
     "http://www.w3.org/2000/svg",
     "svg",
@@ -549,19 +549,19 @@ export function createChessboard(
     }
   }
 
-  function createAnnotationNode(annotation: Annotation): SVGElement {
+  function createAnnotationNode(annotation: Annotation): RenderKeyedAnnotation {
     const tag = annotation.kind === "arrow" ? "path" : "circle";
     const node = host.ownerDocument.createElementNS(
       "http://www.w3.org/2000/svg",
       tag,
-    ) as SVGElement;
+    ) as RenderKeyedAnnotation;
     applyAnnotationDataAttrs(node, annotation);
 
     return node;
   }
 
   function applyAnnotationDataAttrs(
-    node: SVGElement,
+    node: RenderKeyedAnnotation,
     annotation: Annotation,
   ): void {
     if (node.getAttribute("data-annotation-id") !== annotation.id) {
@@ -604,26 +604,24 @@ export function createChessboard(
       if (node && node.dataset.kind !== annotation.kind) {
         node.remove();
         annotationNodes.delete(annotation.id);
-        annotationRenderKeys.delete(annotation.id);
         node = undefined;
       }
       if (!node) {
         node = createAnnotationNode(annotation);
         paintAnnotation(node, annotation);
         annotationLayer.append(node);
+        node.__pwRenderKey = key;
         annotationNodes.set(annotation.id, node);
-        annotationRenderKeys.set(annotation.id, key);
-      } else if (annotationRenderKeys.get(annotation.id) !== key) {
+      } else if (node.__pwRenderKey !== key) {
         applyAnnotationDataAttrs(node, annotation);
         paintAnnotation(node, annotation);
-        annotationRenderKeys.set(annotation.id, key);
+        node.__pwRenderKey = key;
       }
     }
     for (const [id, node] of annotationNodes) {
       if (!seen.has(id)) {
         node.remove();
         annotationNodes.delete(id);
-        annotationRenderKeys.delete(id);
       }
     }
   }
@@ -1504,7 +1502,6 @@ export function createChessboard(
       for (const mark of markNodes.values()) mark.remove();
       markNodes.clear();
       annotationNodes.clear();
-      annotationRenderKeys.clear();
       board.remove();
     },
   };

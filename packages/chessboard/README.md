@@ -205,6 +205,10 @@ Override the CSS custom properties on `.pw-board` to theme squares, marks, and a
 }
 ```
 
+Available animation properties:
+
+- `--pw-animation-easing`: Easing curve for piece movement transitions.
+
 `coordinates: true` renders a–h / 1–8 edge labels that follow the orientation; `coordinates: false` (the default) renders none. Default labels use contrasting colors for the built-in board. Custom themes can set `--pw-coordinate-on-light` and `--pw-coordinate-on-dark` independently; `--pw-coordinate-color` overrides both parities.
 
 `animationMs: 0` switches to instant updates. A newer approved move or position update retargets the active transition; transitions are not queued. Position updates reconcile by piece identity, so a piece that changed squares keeps its DOM node and glides; a captured piece disappears when the mover arrives.

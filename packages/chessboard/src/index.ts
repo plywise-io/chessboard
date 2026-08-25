@@ -317,28 +317,6 @@ function annotationRenderKey(
     : `circle\u001f${annotation.layer}\u001f${color}\u001f${orientation}\u001f${annotation.square}`;
 }
 
-type ValidatedFields = {
-  readonly orientation?: Color;
-  readonly ariaLabel?: string;
-  readonly animationMs?: number;
-  readonly coordinates?: boolean;
-  readonly theme?: { readonly value: BoardTheme | undefined };
-  readonly pieceSet?: PieceSources | string | null | undefined;
-  readonly interaction?: Interaction | null;
-  readonly presentation?: Presentation;
-  readonly annotations?: readonly Annotation[];
-  readonly visibleLayers?: {
-    readonly value: ReadonlySet<string> | undefined;
-  };
-};
-
-type Dirty = {
-  marks: boolean;
-  annotations: boolean;
-  coordinates: boolean;
-  reposition: boolean;
-};
-
 function squareToCoord(
   square: Square,
   orientation: Color,
@@ -515,13 +493,6 @@ export function createChessboard(
     place(node, square, orientation);
   }
 
-  function annotationGeometryKey(annotation: Annotation): string {
-    if (annotation.kind === "arrow") {
-      return `a:${annotation.from},${annotation.to}`;
-    }
-    return `c:${annotation.square}`;
-  }
-
   function paintAnnotation(node: SVGElement, annotation: Annotation): void {
     if (annotation.kind === "arrow") {
       const from = squareToCoord(annotation.from, orientation);
@@ -586,22 +557,13 @@ export function createChessboard(
     }
   }
 
-  function annotationsMatch(left: Annotation, right: Annotation): boolean {
-    return (
-      left.kind === right.kind &&
-      left.layer === right.layer &&
-      left.color === right.color &&
-      annotationGeometryKey(left) === annotationGeometryKey(right)
-    );
-  }
-
   function renderAnnotations(next: readonly Annotation[]): void {
     const seen = new Set<string>();
     for (const annotation of next) {
       seen.add(annotation.id);
       const key = annotationRenderKey(annotation, orientation);
       let node = annotationNodes.get(annotation.id);
-      if (node && node.dataset.kind !== annotation.kind) {
+      if (node && node.dataset.annotationKind !== annotation.kind) {
         node.remove();
         annotationNodes.delete(annotation.id);
         node = undefined;
@@ -1142,118 +1104,6 @@ export function createChessboard(
   board.addEventListener("pointercancel", pointerCancel);
   board.addEventListener("lostpointercapture", lostPointerCapture);
   board.addEventListener("contextmenu", contextMenu);
-
-  function validateUpdateFields(update: ChessboardUpdate): ValidatedFields {
-    const fields: {
-      -readonly [K in keyof ValidatedFields]: ValidatedFields[K];
-    } = {};
-    if (update.orientation !== undefined) {
-      fields.orientation = validateColor(update.orientation, "orientation");
-    }
-    if (update.animationMs !== undefined) {
-      fields.animationMs = validateAnimation(update.animationMs);
-    }
-    if (update.coordinates !== undefined) {
-      fields.coordinates = validateBoolean(update.coordinates, "coordinates");
-    }
-    if (update.interaction !== undefined) {
-      fields.interaction =
-        update.interaction === null
-          ? null
-          : validateInteraction(update.interaction);
-    }
-    if (update.presentation !== undefined) {
-      fields.presentation = validatePresentation(update.presentation);
-    }
-    if (update.annotations !== undefined) {
-      fields.annotations = validateAnnotations(update.annotations);
-    }
-    if (update.visibleLayers !== undefined) {
-      fields.visibleLayers = {
-        value: validateVisibleLayers(update.visibleLayers),
-      };
-    }
-    if (update.pieceSet !== undefined) {
-      fields.pieceSet = validatePieceSet(update.pieceSet);
-    }
-    if (update.theme !== undefined) {
-      fields.theme = { value: validateTheme(update.theme) };
-    }
-    if (update.ariaLabel !== undefined) fields.ariaLabel = update.ariaLabel;
-    return fields;
-  }
-
-  function applyFields(fields: ValidatedFields, dirty: Dirty): void {
-    if (fields.orientation !== undefined) {
-      clearDragVisual();
-      clearDrawVisual();
-      orientation = fields.orientation;
-      dirty.reposition = true;
-      dirty.coordinates = true;
-      dirty.marks = true;
-      dirty.annotations = true;
-    }
-    if (fields.ariaLabel !== undefined) {
-      board.setAttribute("aria-label", fields.ariaLabel);
-    }
-    if (fields.animationMs !== undefined) {
-      board.style.setProperty(
-        "--pw-animation-duration",
-        `${fields.animationMs}ms`,
-      );
-    }
-    if (fields.coordinates !== undefined) {
-      coordinates = fields.coordinates;
-      dirty.coordinates = true;
-    }
-    if (fields.theme !== undefined) {
-      theme = fields.theme.value;
-      applyTheme(theme);
-    }
-    if (fields.pieceSet !== undefined && fields.pieceSet !== pieceSet) {
-      pieceSet = fields.pieceSet;
-      for (const [square, piece] of position) {
-        const node = nodes.get(square);
-        if (node) repaintPieceImage(node, piece);
-      }
-    }
-    if (fields.interaction !== undefined) {
-      if (fields.interaction === null) {
-        clearDragVisual();
-        clearDrawVisual();
-        interaction = null;
-        destinations = new Map();
-      } else {
-        interaction = fields.interaction;
-        destinations = interaction.destinations;
-        if (drag && !destinations.has(drag.source)) clearDragVisual();
-      }
-      dirty.marks = true;
-    }
-    if (fields.presentation !== undefined) {
-      selected = fields.presentation.selected;
-      lastMove = fields.presentation.lastMove;
-      checkedSquare = fields.presentation.checked;
-      dirty.marks = true;
-    }
-    if (fields.annotations !== undefined) {
-      annotations = fields.annotations;
-      dirty.annotations = true;
-    }
-    if (fields.visibleLayers !== undefined) {
-      visibleLayers = fields.visibleLayers.value;
-      dirty.annotations = true;
-    }
-  }
-
-  function flushBoard(dirty: Dirty): void {
-    if (dirty.reposition) {
-      for (const [square, node] of nodes) place(node, square, orientation);
-    }
-    if (dirty.coordinates) renderCoordinates();
-    if (dirty.marks) renderMarks();
-    if (dirty.annotations) renderVisibleAnnotations(annotations);
-  }
 
   renderPosition(position);
   renderMarks();

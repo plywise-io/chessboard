@@ -588,3 +588,30 @@ test("stable-props parent re-render causes no board work", async () => {
   assert.equal(records.length, 0);
   await act(() => root.unmount());
 });
+
+test('forwards coordinates="inside" into the imperative board', async () => {
+  const dom = new JSDOM('<div id="root"></div>');
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const [{ act, createElement }, { createRoot }, { Chessboard }] =
+    await Promise.all([
+      import("react"),
+      import("react-dom/client"),
+      import("../dist/index.js"),
+    ]);
+  const host = document.querySelector("#root");
+  const root = createRoot(host);
+  const position = new Map([["e2", { color: "white", role: "pawn" }]]);
+
+  await act(() =>
+    root.render(createElement(Chessboard, { position, coordinates: "inside" })),
+  );
+  assert.equal(host.querySelector(".pw-board").dataset.coordinates, "inside");
+  assert.equal(host.querySelectorAll(".pw-coordinate-inside").length, 64);
+  const e4 = host.querySelector('.pw-coordinate-inside[data-square="e4"]');
+  assert.equal(e4?.textContent, "e4");
+
+  await act(() => root.unmount());
+});

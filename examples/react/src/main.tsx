@@ -150,7 +150,9 @@ function App() {
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [showStateMarks, setShowStateMarks] = useState(false);
   const [lastMove, setLastMove] = useState<Presentation["lastMove"]>();
-  const [showCoordinates, setShowCoordinates] = useState(false);
+  const [coordinatesMode, setCoordinatesMode] = useState<
+    boolean | "edge" | "inside"
+  >(false);
   const [hiddenLayers, setHiddenLayers] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -278,7 +280,7 @@ function App() {
         orientation={orientation}
         boardLabel="Demo chess position"
         animationMs={150}
-        coordinates={showCoordinates}
+        coordinates={coordinatesMode}
         interaction={interaction}
         annotations={showAnnotations ? mergedAnnotations : NO_ANNOTATIONS}
         {...(pieceSetProp === undefined ? {} : { pieceSet: pieceSetProp })}
@@ -366,11 +368,16 @@ function App() {
         </button>
         <button
           type="button"
-          aria-pressed={showCoordinates}
-          data-testid="toggle-coordinates"
-          onClick={() => setShowCoordinates((prev) => !prev)}
+          aria-pressed={coordinatesMode !== false}
+          data-coordinates-mode={coordinatesMode}
+          data-testid="cycle-coordinates"
+          onClick={() =>
+            setCoordinatesMode((prev) =>
+              prev === false ? "edge" : prev === "edge" ? "inside" : false,
+            )
+          }
         >
-          {showCoordinates ? "Hide" : "Show"} coordinates
+          Coordinates: {coordinatesMode === false ? "off" : coordinatesMode}
         </button>
         <button
           type="button"

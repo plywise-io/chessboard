@@ -52,7 +52,7 @@ export interface ChessboardProps
   readonly orientation?: Color;
   readonly boardLabel?: string;
   readonly animationMs?: number;
-  readonly coordinates?: boolean;
+  readonly coordinates?: boolean | "edge" | "inside";
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
   readonly annotations?: readonly Annotation[];

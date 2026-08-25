@@ -2403,3 +2403,85 @@ test("unchanged annotations do not rewrite their SVG node", () => {
 
   assert.equal(writes, 0);
 });
+
+// Inside coordinates
+test("coordinates accept boolean, edge, and inside modes", () => {
+  for (const [value, expected] of [
+    [true, "edge"],
+    ["edge", "edge"],
+    ["inside", "inside"],
+    [false, "none"],
+  ]) {
+    const { host } = makeBoard(
+      new Map([["e2", { color: "white", role: "pawn" }]]),
+      { coordinates: value },
+    );
+    assert.equal(host.querySelector(".pw-board").dataset.coordinates, expected);
+  }
+
+  const { host: omittedHost } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+  );
+  assert.equal(
+    omittedHost.querySelector(".pw-board").dataset.coordinates,
+    "none",
+  );
+});
+
+test("coordinates reject invalid values with TypeError", () => {
+  for (const value of ["top", 1]) {
+    const { board } = makeBoard(
+      new Map([["e2", { color: "white", role: "pawn" }]]),
+    );
+    assert.throws(() => board.set({ coordinates: value }), TypeError);
+  }
+});
+
+test("coordinates: inside renders 64 labels with full square names", () => {
+  const { host, board } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    { coordinates: "inside" },
+  );
+  const inside = host.querySelectorAll(".pw-coordinate-inside");
+  assert.equal(inside.length, 64);
+
+  const e4 = host.querySelector('.pw-coordinate-inside[data-square="e4"]');
+  assert.equal(e4?.textContent, "e4");
+  // e4 is a light square; its label must carry the light parity.
+  assert.equal(e4.dataset.parity, "light");
+
+  board.set({ orientation: "black" });
+  const flipped = host.querySelectorAll(".pw-coordinate-inside");
+  assert.equal(flipped.length, 64);
+  const flippedE4 = host.querySelector(
+    '.pw-coordinate-inside[data-square="e4"]',
+  );
+  assert.equal(flippedE4?.textContent, "e4");
+});
+
+test("coordinates update path switches between edge, inside, and off", () => {
+  const { host, board } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    { coordinates: true },
+  );
+  assert.equal(host.querySelectorAll(".pw-coordinate").length, 16);
+
+  board.set({ coordinates: "inside" });
+  const board1 = host.querySelector(".pw-board");
+  assert.equal(board1.dataset.coordinates, "inside");
+  assert.equal(host.querySelectorAll(".pw-coordinate").length, 64);
+
+  board.set({ coordinates: false });
+  const board2 = host.querySelector(".pw-board");
+  assert.equal(board2.dataset.coordinates, "none");
+  assert.equal(host.querySelectorAll(".pw-coordinate").length, 0);
+});
+
+test("coordinates: edge mode keeps 16 edge labels", () => {
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    { coordinates: true },
+  );
+  assert.equal(host.querySelectorAll(".pw-coordinate").length, 16);
+  assert.equal(host.querySelectorAll(".pw-coordinate-inside").length, 0);
+});

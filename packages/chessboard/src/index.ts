@@ -176,8 +176,8 @@ export interface ChessboardConfig {
   readonly orientation?: Color;
   readonly ariaLabel?: string;
   readonly animationMs?: number;
-  /** Edge coordinates (files a–h, ranks 1–8), orientation-aware. */
-  readonly coordinates?: boolean;
+  /** Coordinates display: `"edge"` (files a–h bottom, ranks 1–8 left), `"inside"` (full square name on every square), boolean kept for compatibility (`true` = `"edge"`, `false` = off). */
+  readonly coordinates?: boolean | "edge" | "inside";
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
   /**
@@ -205,7 +205,8 @@ export interface ChessboardUpdate {
   readonly orientation?: Color;
   readonly ariaLabel?: string;
   readonly animationMs?: number;
-  readonly coordinates?: boolean;
+  readonly coordinates?: boolean | "edge" | "inside";
+  /** Same contract as on {@link ChessboardConfig}. */
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
   /**
@@ -378,10 +379,10 @@ export function createChessboard(
     config.pieceSet,
   );
   let theme: BoardTheme | undefined = validateTheme(config.theme);
-  let coordinates =
-    config.coordinates === undefined
-      ? false
-      : validateBoolean(config.coordinates, "coordinates");
+  let coordinates = validateCoordinates(
+    config.coordinates === undefined ? false : config.coordinates,
+    "coordinates",
+  );
   let destroyed = false;
   // A pointerdown starts a candidate; the first move fills in the visual
   // fields and commits it as a drag.
@@ -669,7 +670,24 @@ export function createChessboard(
   function renderCoordinates(): void {
     const doc = host.ownerDocument;
     coordinateLayer.replaceChildren();
+    board.dataset.coordinates = coordinates === false ? "none" : coordinates;
     if (!coordinates) return;
+    if (coordinates === "inside") {
+      for (const file of files) {
+        for (let rank = 1; rank <= 8; rank += 1) {
+          const label = doc.createElement("span");
+          label.className = "pw-coordinate pw-coordinate-inside";
+          const square = `${file}${rank}` as Square;
+          label.dataset.square = square;
+          label.textContent = square;
+          const coord = squareToCoord(square, orientation);
+          label.dataset.parity = coordParity(coord.x, coord.y);
+          placeCoord(label, coord.x, coord.y);
+          coordinateLayer.append(label);
+        }
+      }
+      return;
+    }
     for (const file of files) {
       const label = doc.createElement("span");
       label.className = "pw-coordinate pw-coordinate-file";
@@ -1180,8 +1198,8 @@ export function createChessboard(
       );
     }
     if (plan.coordinatesChanged) {
-      coordinates = validateBoolean(
-        update.coordinates as boolean,
+      coordinates = validateCoordinates(
+        update.coordinates as boolean | "edge" | "inside",
         "coordinates",
       );
     }
@@ -1456,11 +1474,14 @@ function validateAnimation(value: number): number {
   return value;
 }
 
-function validateBoolean(value: boolean, name: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new TypeError(`${name} must be a boolean`);
-  }
-  return value;
+function validateCoordinates(
+  value: boolean | "edge" | "inside",
+  name: string,
+): false | "edge" | "inside" {
+  if (value === true) return "edge";
+  if (value === false) return false;
+  if (value === "edge" || value === "inside") return value;
+  throw new TypeError(`${name} must be a boolean, "edge", or "inside"`);
 }
 
 const PIECE_CODES = Object.keys(cburnett);

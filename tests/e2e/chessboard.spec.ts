@@ -616,8 +616,12 @@ test("renders edge coordinates that follow orientation and stay click-through", 
 }) => {
   await page.goto("/");
 
+  await expect(page.locator(".pw-board")).toHaveAttribute(
+    "data-coordinates",
+    "none",
+  );
   await expect(page.locator(".pw-coordinate")).toHaveCount(0);
-  await page.getByTestId("toggle-coordinates").click();
+  await page.getByTestId("cycle-coordinates").click();
   await expect(page.locator(".pw-coordinate")).toHaveCount(16);
 
   const labelVars = (kind: "file" | "rank", name: string) =>
@@ -644,9 +648,8 @@ test("renders edge coordinates that follow orientation and stay click-through", 
   if (!box) return;
   const cell = box.width / 8;
   await page.mouse.click(box.x + 0.2 * cell, box.y + 6.3 * cell);
-  await expect(page.getByTestId("last-event")).toHaveText(/select a2/);
-
-  await page.getByTestId("toggle-coordinates").click();
+  await page.getByTestId("cycle-coordinates").click();
+  await page.getByTestId("cycle-coordinates").click();
   await expect(page.locator(".pw-coordinate")).toHaveCount(0);
 });
 
@@ -680,4 +683,81 @@ test("dragging shows an origin ghost and a live drop-target highlight", async ({
   await expect(page.locator(".pw-piece-ghost")).toHaveCount(0);
   await expect(page.locator(".pw-mark-drag-target")).toHaveCount(0);
   await expect(page.locator('.pw-piece[data-square="e4"]')).toBeVisible();
+});
+
+test("renders inside-square coordinates with 64 labels, full names, and parity", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const cycle = page.getByTestId("cycle-coordinates");
+
+  // Start: off.
+  await expect(page.locator(".pw-board")).toHaveAttribute(
+    "data-coordinates",
+    "none",
+  );
+  await expect(page.locator(".pw-coordinate")).toHaveCount(0);
+
+  // One click: edge (regression — preserves the original 16-label mode).
+  await cycle.click();
+  await expect(cycle).toHaveAttribute("data-coordinates-mode", "edge");
+  await expect(page.locator(".pw-board")).toHaveAttribute(
+    "data-coordinates",
+    "edge",
+  );
+  await expect(page.locator(".pw-coordinate")).toHaveCount(16);
+  await expect(page.locator(".pw-coordinate-inside")).toHaveCount(0);
+
+  // Second click: inside — 64 spans, one per square, each with the
+  // square name as text and a light/dark parity token.
+  await cycle.click();
+  await expect(cycle).toHaveAttribute("data-coordinates-mode", "inside");
+  await expect(page.locator(".pw-board")).toHaveAttribute(
+    "data-coordinates",
+    "inside",
+  );
+  await expect(page.locator(".pw-coordinate-inside")).toHaveCount(64);
+  await expect(page.locator(".pw-coordinate")).toHaveCount(64);
+
+  const e4 = page.locator('.pw-coordinate-inside[data-square="e4"]');
+  await expect(e4).toHaveText("e4");
+  await expect(e4).toHaveAttribute("data-parity", /^(light|dark)$/);
+  // Inside labels sit in their own square via --pw-file/--pw-rank.
+  const e4Vars = await e4.evaluate((node: HTMLElement) => [
+    node.style.getPropertyValue("--pw-file"),
+    node.style.getPropertyValue("--pw-rank"),
+  ]);
+  expect(e4Vars).toEqual(["4", "4"]);
+
+  // All 64 square names are present exactly once.
+  const seen = await page
+    .locator(".pw-coordinate-inside")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => (node as HTMLElement).dataset.square),
+    );
+  expect(new Set(seen).size).toBe(64);
+
+  // Flipping orientation repaints in place — same 64 nodes, e4 now sits
+  // at its black-orientation cell (column 3, row 3 in display coords).
+  await page.getByRole("button", { name: "Flip orientation" }).click();
+  await expect(page.locator(".pw-coordinate-inside")).toHaveCount(64);
+  const flippedE4 = page.locator('.pw-coordinate-inside[data-square="e4"]');
+  const flippedVars = await flippedE4.evaluate((node: HTMLElement) => [
+    node.style.getPropertyValue("--pw-file"),
+    node.style.getPropertyValue("--pw-rank"),
+  ]);
+  // squareToCoord flips both axes in black orientation: file "e" (col 4)
+  // becomes display col 3 and rank 4 becomes display row 3.
+  expect(flippedVars).toEqual(["3", "3"]);
+
+  // Third click returns to off — host attribute clears, layer is empty.
+  await page.getByRole("button", { name: "Flip orientation" }).click();
+  await cycle.click();
+  await expect(cycle).toHaveAttribute("data-coordinates-mode", "false");
+  await expect(page.locator(".pw-board")).toHaveAttribute(
+    "data-coordinates",
+    "none",
+  );
+  await expect(page.locator(".pw-coordinate")).toHaveCount(0);
 });

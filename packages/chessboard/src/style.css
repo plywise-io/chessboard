@@ -212,3 +212,11 @@
 .pw-coordinate[data-parity="dark"] {
   color: var(--pw-coordinate-color, var(--pw-coordinate-on-dark));
 }
+
+/* Inside-square mode: full square name in each square's corner. */
+.pw-board[data-coordinates="inside"] .pw-coordinate {
+  font-size: clamp(0.5rem, 2.5cqi, 1rem);
+  text-transform: uppercase;
+  align-items: flex-start;
+  justify-content: flex-start;
+}

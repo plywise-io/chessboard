@@ -73,23 +73,31 @@ Bundled catalogs: `cburnett` is Cburnett artwork under its BSD-3-Clause option (
 
 ### Interaction
 
+```ts
 interface Interaction {
   readonly destinations: ReadonlyMap<Square, readonly Square[]>;
   readonly onEvent: (event: InteractionEvent) => void;
   readonly annotationGestures?: readonly AnnotationGesture[];
+  readonly keyboard?: boolean;
 }
 ```
 
 `InteractionEvent` is a discriminated union:
 
-- `{ type: "select", square: Square, origin: "pointer" }`
-- `{ type: "clear", origin: "pointer" }`
-- `{ type: "move", from: Square, to: Square, origin: "selection" | "drag" }`
+- `{ type: "select", square: Square, origin: "pointer" | "keyboard" }`
+- `{ type: "clear", origin: "pointer" | "keyboard" }`
+- `{ type: "move", from: Square, to: Square, origin: "selection" | "drag" | "keyboard" }`
 - `{ type: "circle", square: Square, origin: "pointer", color?: string }`
 - `{ type: "arrow", from: Square, to: Square, origin: "pointer", color?: string }`
 While `interaction` is enabled, right-button gestures report annotation intents instead of moving pieces: pressing and releasing the right button on one square emits a `circle` intent, and right-dragging between two squares emits an `arrow` intent. A translucent snapped preview is shown during the gesture and the native context menu is suppressed. These are requests only — the caller decides whether to add, remove, or ignore the corresponding annotation in its own state. Spectator boards (`interaction: null` or omitted) keep the native context menu and emit nothing.
 
 During a drag the renderer shows two transient affordances: a translucent ghost of the piece stays on its origin square (`.pw-piece-ghost`), and the legal destination under the pointer is highlighted (`.pw-mark-drag-target`, with `data-destination` `empty`/`occupied`, styled by `--pw-destination-color`/`--pw-capture-color`). Both are removed on release; neither is part of controlled state.
+
+#### Opt-in keyboard input
+
+Set `interaction.keyboard: true` to make the board focusable. The renderer switches the host element to `role="application"` with `tabindex="0"`; without the flag the host stays `role="img"` with no tabindex (the default for an image-like widget).
+
+Once focused, the arrow keys move a cursor mark (`.pw-mark-cursor`, themed by `--pw-cursor-color`); Enter and Space activate the cursor (select / move / clear, mirroring the click path with `origin: "keyboard"`); Escape clears the cursor and emits a `clear` event. Arrow movement starts at `a1` under white orientation and at `h1` under black, and clamps at the board edges. The renderer announces the focused square — and the piece on it, if any — through a screen-reader live region (`.pw-live`, `aria-live="polite"`); the live region is visually hidden but always present in the DOM. Focus loss (`blur`) clears the cursor without emitting. Disabling interaction (`set({ interaction: null })`) clears any pending cursor and restores the default `role="img"`.
 
 #### Modifier-coloured annotation gestures
 
@@ -215,8 +223,7 @@ Available animation properties:
 
 ## Accessibility
 
-The renderer exposes the board as one labelled image. `ariaLabel` customizes that label. Default piece glyphs and annotation shapes are decorative and hidden from assistive technology. The package does not implement keyboard interaction and does not claim a fully accessible interactive-board experience.
-
+The renderer exposes the board as one labelled image. `ariaLabel` customizes that label. Default piece glyphs and annotation shapes are decorative and hidden from assistive technology. When `interaction.keyboard: true`, the renderer also makes the board focusable (`role="application"`, `tabindex="0"`), moves a keyboard cursor with the arrow keys, activates it on Enter or Space, clears on Escape, and announces the focused square — and the piece on it, if any — through a polite live region. The renderer owns the cursor and the live region; the caller still owns the rules that decide which moves to apply when `onEvent` fires.
 ## Lifecycle
 
 - `createChessboard` mounts the DOM subtree under `host` and returns the controller.

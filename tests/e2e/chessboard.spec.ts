@@ -761,3 +761,182 @@ test("renders inside-square coordinates with 64 labels, full names, and parity",
   );
   await expect(page.locator(".pw-coordinate")).toHaveCount(0);
 });
+
+test("keyboard enabled: board becomes an application with a focusable cursor", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const board = page.locator(".pw-board");
+
+  // Default state in the example ships with keyboard input on.
+  await expect(board).toHaveAttribute("role", "application");
+  await expect(board).toHaveAttribute("tabindex", "0");
+
+  // Focus the board and press ArrowRight to drop a cursor mark at b1
+  // (default anchor is a1, white orientation, ArrowRight advances file).
+  await board.focus();
+  await page.keyboard.press("ArrowRight");
+  const cursor = page.locator('[data-mark="cursor"]');
+  await expect(cursor).toHaveAttribute("data-square", "b1");
+
+  // Status line reflects a keyboard-driven cursor announce path.
+  await expect(page.getByTestId("last-event")).toHaveText(/no gesture yet/);
+});
+
+test("keyboard arrows walk the cursor with orientation, Enter selects, Escape clears", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const board = page.locator(".pw-board");
+  await board.focus();
+
+  // Anchor is a1 in white orientation. ArrowUp advances rank (a2),
+  // ArrowRight advances file (b2).
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator('[data-mark="cursor"]')).toHaveAttribute(
+    "data-square",
+    "b2",
+  );
+
+  // Enter selects the occupied square and emits a keyboard-origin event.
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("last-event")).toHaveText(
+    /select b2 \(keyboard\)/,
+  );
+  await expect(page.locator('[data-mark="selected"]')).toHaveAttribute(
+    "data-square",
+    "b2",
+  );
+  // Walk the cursor to d5 — occupied by no piece, selectable by no
+  // rules, a destination of nothing — and Enter clears the selection
+  // with keyboard origin.
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("last-event")).toHaveText(/clear \(keyboard\)/);
+
+  // Escape also clears without leaving a cursor mark behind.
+  await page.keyboard.press("Escape");
+  await expect(page.locator('[data-mark="cursor"]')).toHaveCount(0);
+  await expect(page.getByTestId("last-event")).toHaveText(/clear \(keyboard\)/);
+});
+
+test("keyboard move emits a keyboard-origin move event end-to-end", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const board = page.locator(".pw-board");
+  await board.focus();
+
+  // Walk to e2 (white pawn), select, walk to e4, select again → move.
+  for (let i = 0; i < 4; i += 1) {
+    await page.keyboard.press("ArrowRight");
+  }
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
+  for (let i = 0; i < 2; i += 1) {
+    await page.keyboard.press("ArrowUp");
+  }
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByTestId("last-event")).toHaveText(
+    /move e2→e4 \(keyboard\)/,
+  );
+  // Pawn is now sitting on e4.
+  await expect(page.locator('.pw-piece[data-square="e4"]')).toHaveAttribute(
+    "data-role",
+    "pawn",
+  );
+});
+
+test("keyboard arrows invert on black orientation and clamp at the edge", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const board = page.locator(".pw-board");
+  await page.getByRole("button", { name: "Flip orientation" }).click();
+  await board.focus();
+
+  // Anchor is h1 in black orientation. ArrowRight flips to a logical
+  // left move (file decreases), landing on g1; ArrowDown flips to a
+  // logical up move (rank increases), landing on g2.
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator('[data-mark="cursor"]')).toHaveAttribute(
+    "data-square",
+    "g2",
+  );
+
+  // Clamp at the left edge: pressing ArrowRight repeatedly from g2
+  // walks through f2, e2, … and stops at a2 instead of wrapping off.
+  for (let i = 0; i < 10; i += 1) {
+    await page.keyboard.press("ArrowRight");
+  }
+  await expect(page.locator('[data-mark="cursor"]')).toHaveAttribute(
+    "data-square",
+    "a2",
+  );
+
+  // Clamp at rank 8: pressing ArrowDown (logical up in black) from a2
+  // walks to a8 and stops there.
+  for (let i = 0; i < 10; i += 1) {
+    await page.keyboard.press("ArrowDown");
+  }
+  await expect(page.locator('[data-mark="cursor"]')).toHaveAttribute(
+    "data-square",
+    "a8",
+  );
+});
+
+test("keyboard can be toggled off, reverting the board semantics and dropping the cursor", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const board = page.locator(".pw-board");
+  await board.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator('[data-mark="cursor"]')).toHaveAttribute(
+    "data-square",
+    "b1",
+  );
+
+  // Disable keyboard input from the example controls.
+  await page.getByTestId("toggle-keyboard").click();
+  await expect(board).toHaveAttribute("role", "img");
+  await expect(board).not.toHaveAttribute("tabindex", "0");
+
+  // Cursor mark is cleared; arrow keys no longer create one.
+  await expect(page.locator('[data-mark="cursor"]')).toHaveCount(0);
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator('[data-mark="cursor"]')).toHaveCount(0);
+});
+
+test("blurring the board drops the cursor without emitting an event", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  const board = page.locator(".pw-board");
+  await board.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator('[data-mark="cursor"]')).toHaveAttribute(
+    "data-square",
+    "b1",
+  );
+  // Move focus elsewhere → cursor mark goes away, no last-event update.
+  await page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    el?.blur();
+  });
+  await expect(page.locator('[data-mark="cursor"]')).toHaveCount(0);
+  await expect(page.getByTestId("last-event")).toHaveText(/no gesture yet/);
+});

@@ -95,14 +95,13 @@ export function Board({ position, onMove, lastMove }) {
 
 The renderer never accepts a move on the caller's behalf. Pointer gestures express an **intention**; only the caller's subsequent `move` or `set({ position })` mutates authoritative state.
 
-- Pointer Events are the only input source. Mouse, touch, and pen share one path through `setPointerCapture`.
-- Selecting a square whose source is in `interaction.destinations` emits `{ type: "select", square, origin: "pointer" }`.
-- Selecting the active source again, a non-source square, or an empty area outside the board emits `{ type: "clear", origin: "pointer" }`.
-- Selecting a destination square for the active source emits `{ type: "move", from, to, origin: "selection" }`.
+- Pointer Events are the default input source. Mouse, touch, and pen share one path through `setPointerCapture`. Set `interaction.keyboard: true` to add keyboard input alongside pointer gestures; see [Accessibility](#accessibility).
+- Selecting a square whose source is in `interaction.destinations` emits `{ type: "select", square, origin: "pointer" }`. With `keyboard: true`, Enter or Space on the same square emits the same event with `origin: "keyboard"`.
+- Selecting the active source again, a non-source square, or an empty area outside the board emits `{ type: "clear", origin: "pointer" }`. Escape on a focused keyboard cursor emits the same event with `origin: "keyboard"`.
+- Selecting a destination square for the active source emits `{ type: "move", from, to, origin: "selection" }`. Enter or Space on a destination while a keyboard cursor sits there emits the same event with `origin: "keyboard"`.
 - Pressing a piece, dragging across squares, and releasing on a destination emits `{ type: "move", from, to, origin: "drag" }`.
 - Drops on the source, outside the board, on a square not in `destinations`, after cancellation, or with a non-primary pointer emit no event and restore the controlled position.
-- Passing `interaction: null` to `set` disables interaction on update and clears transient pointer state.
-
+- Passing `interaction: null` to `set` disables interaction on update and clears transient pointer and keyboard state.
 The caller controls whether a move is applied. The renderer never optimistically mutates the position.
 
 ## Presentation marks
@@ -277,13 +276,13 @@ Caller collections are copied at the seam. External mutation of `Position`, `des
 
 ## Accessibility
 
-The renderer exposes the board as one labelled image. `ariaLabel` in the core package and `boardLabel` in React customize that label; pieces and annotation shapes are decorative and hidden from assistive technology. The package does not implement keyboard interaction, roving square focus, screen-reader move entry, or move announcements, and therefore does not claim a fully accessible interactive-board experience. Callers that need an accessible interactive board must build that layer above the renderer.
+The renderer exposes the board as one labelled image. `ariaLabel` in the core package and `boardLabel` in React customize that label; pieces and annotation shapes are decorative and hidden from assistive technology. Set `interaction.keyboard: true` (and `keyboard: true` in React's `interaction` prop) to opt into keyboard interaction: the host becomes a focusable `role="application"` with `tabindex="0"`, the arrow keys move a keyboard cursor mark (`.pw-mark-cursor`, themed by `--pw-cursor-color`), Enter and Space activate the cursor (emitting `select`, `move`, or `clear` with `origin: "keyboard"`), Escape clears the cursor, and a polite live region (`.pw-live`, `aria-live="polite"`) announces the focused square and the piece on it. Without the flag the board stays an image-like widget with no tabindex. The renderer owns the cursor and the live region; the caller still owns the rules that decide which moves to apply when `onEvent` fires.
 
 ## React adapter
 
 `@plywise/chessboard-react` exposes the core contract as props:
 
-- `interaction` (`{ destinations, onEvent, annotationGestures? } | null`).
+- `interaction` (`{ destinations, onEvent, annotationGestures?, keyboard? } | null`). Set `keyboard: true` to enable arrow-key navigation, Enter/Space activation, Escape clearing, and the polite live region.
 - `presentation` (`{ selected?, lastMove?, checked? }`).
 - `annotations` (`Annotation[]`).
 - `visibleLayers` (`ReadonlySet<string> | undefined`; omitted shows all, empty hides all).
@@ -303,9 +302,6 @@ Re-exported domain types include `Color`, `File`, `Rank`, `Role`, `Square`, `Pie
 
 ## Out of scope
 
-The renderer does not implement chess rules, FEN/PGN parsing, legal-move calculation, turns, premoves, ghost pieces, free drawing, board editing, keyboard interaction, screen-reader move entry, full keyboard navigation, a public agent namespace, a public schema package, a custom piece element factory, raw SVG access, or 3D/canvas rendering. The internal `BoardSnapshot` and `BoardCommand` types are private and not exported.
-
-## Development
 
 ```sh
 npm ci

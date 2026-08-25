@@ -32,17 +32,17 @@ export type Position = ReadonlyMap<Square, Piece>;
 export type SelectEvent = {
   readonly type: "select";
   readonly square: Square;
-  readonly origin: "pointer";
+  readonly origin: "pointer" | "keyboard";
 };
 export type ClearEvent = {
   readonly type: "clear";
-  readonly origin: "pointer";
+  readonly origin: "pointer" | "keyboard";
 };
 export type MoveEvent = {
   readonly type: "move";
   readonly from: Square;
   readonly to: Square;
-  readonly origin: "selection" | "drag";
+  readonly origin: "selection" | "drag" | "keyboard";
 };
 export type CircleEvent = {
   readonly type: "circle";
@@ -76,6 +76,7 @@ export interface Interaction {
   readonly destinations: Destinations;
   readonly onEvent: (event: InteractionEvent) => void;
   readonly annotationGestures?: readonly AnnotationGesture[];
+  readonly keyboard?: boolean;
 }
 
 export interface LastMove {
@@ -296,13 +297,13 @@ function sourcesDataUri(
 // ponytail: fixed distance; expose a config knob only if a consumer
 // measurably needs a different activation feel.
 const dragActivationPx = 3;
-
 type MarkKind =
   | "selected"
   | "destination"
   | "last-move-from"
   | "last-move-to"
-  | "check";
+  | "check"
+  | "cursor";
 
 function markKey(kind: MarkKind, square: Square): string {
   return `${kind}:${square}`;
@@ -419,6 +420,7 @@ export function createChessboard(
     frame: number | null;
   };
   let draw: DrawState | null = null;
+  let keyboardCursor: Square | null = null;
 
   const board = host.ownerDocument.createElement("div");
   const view = host.ownerDocument.defaultView;
@@ -440,6 +442,12 @@ export function createChessboard(
   coordinateLayer.className = "pw-coordinates";
   coordinateLayer.setAttribute("aria-hidden", "true");
   coordinateLayer.style.pointerEvents = "none";
+  const liveRegion = host.ownerDocument.createElement("div");
+  liveRegion.className = "pw-live";
+  liveRegion.setAttribute("aria-live", "polite");
+  function announce(text: string): void {
+    liveRegion.textContent = text;
+  }
   board.className = "pw-board";
   board.setAttribute("role", "img");
   board.setAttribute("aria-label", config.ariaLabel ?? "Chessboard");
@@ -477,9 +485,21 @@ export function createChessboard(
     }
   }
 
-  applyTheme(theme);
+  function applyKeyboardSemantics(): void {
+    const enabled = interaction !== null && interaction.keyboard === true;
+    if (!enabled) {
+      board.setAttribute("role", "img");
+      board.removeAttribute("tabindex");
+      keyboardCursor = null;
+      return;
+    }
+    board.setAttribute("role", "application");
+    board.setAttribute("tabindex", "0");
+  }
 
-  board.append(annotationLayer, coordinateLayer);
+  applyTheme(theme);
+  applyKeyboardSemantics();
+  board.append(annotationLayer, coordinateLayer, liveRegion);
   host.append(board);
 
   function paintPiece(
@@ -629,6 +649,7 @@ export function createChessboard(
       position,
       lastMove,
       checkedSquare,
+      keyboardCursor ?? undefined,
     );
     const wantedKeys = new Set<string>();
     for (const mark of wanted) {
@@ -971,7 +992,14 @@ export function createChessboard(
     } else {
       drag = null;
     }
+    pressSquare(target, "pointer");
+  }
 
+  function pressSquare(
+    target: Square,
+    origin: "pointer" | "keyboard",
+  ): InteractionEvent | null {
+    if (!interaction) return null;
     const dests = destinations;
     const inSelectedDests = selected
       ? (dests.get(selected)?.includes(target) ?? false)
@@ -980,28 +1008,29 @@ export function createChessboard(
     if (selected && inSelectedDests && selected !== target) {
       // The click resolves this gesture; it must not promote to a drag.
       drag = null;
-      interaction.onEvent({
+      const event: MoveEvent = {
         type: "move",
         from: selected,
         to: target,
-        origin: "selection",
-      });
-      return;
+        origin: origin === "keyboard" ? "keyboard" : "selection",
+      };
+      interaction.onEvent(event);
+      return event;
     }
     if (selected === target) {
       drag = null;
-      interaction.onEvent({ type: "clear", origin: "pointer" });
-      return;
+      const event: ClearEvent = { type: "clear", origin };
+      interaction.onEvent(event);
+      return event;
     }
     if (dests.has(target)) {
-      interaction.onEvent({
-        type: "select",
-        square: target,
-        origin: "pointer",
-      });
-      return;
+      const event: SelectEvent = { type: "select", square: target, origin };
+      interaction.onEvent(event);
+      return event;
     }
-    interaction.onEvent({ type: "clear", origin: "pointer" });
+    const event: ClearEvent = { type: "clear", origin };
+    interaction.onEvent(event);
+    return event;
   }
 
   function pointerMove(event: PointerEvent): void {
@@ -1116,12 +1145,79 @@ export function createChessboard(
     if (draw?.pointerId === event.pointerId) clearDrawVisual();
   }
 
+  function keyDown(event: KeyboardEvent): void {
+    if (interaction === null || interaction.keyboard !== true) return;
+    const key = event.key;
+    if (
+      key === "ArrowLeft" ||
+      key === "ArrowRight" ||
+      key === "ArrowUp" ||
+      key === "ArrowDown"
+    ) {
+      event.preventDefault();
+      const invert = orientation === "black";
+      const base = keyboardCursor ?? (invert ? "h1" : "a1");
+      let f = files.indexOf(base[0] as File);
+      let r = Number(base[1]);
+      const df = key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0;
+      const dr = key === "ArrowUp" ? 1 : key === "ArrowDown" ? -1 : 0;
+      if (invert) {
+        f -= df;
+        r -= dr;
+      } else {
+        f += df;
+        r += dr;
+      }
+      f = Math.max(0, Math.min(7, f));
+      r = Math.max(1, Math.min(8, r));
+      keyboardCursor = `${files[f]}${r}` as Square;
+      renderMarks();
+      const piece = position.get(keyboardCursor);
+      announce(
+        piece
+          ? `${keyboardCursor}, ${piece.color} ${piece.role}`
+          : `${keyboardCursor}`,
+      );
+      return;
+    }
+    if (key === "Enter" || key === " ") {
+      if (keyboardCursor === null) return;
+      event.preventDefault();
+      const emitted = pressSquare(keyboardCursor, "keyboard");
+      if (emitted) {
+        announce(
+          emitted.type === "move"
+            ? `${emitted.from} to ${emitted.to}`
+            : emitted.type === "select"
+              ? `selected ${emitted.square}`
+              : "cleared",
+        );
+      }
+      return;
+    }
+    if (key === "Escape") {
+      if (keyboardCursor === null) return;
+      keyboardCursor = null;
+      renderMarks();
+      interaction.onEvent({ type: "clear", origin: "keyboard" });
+      announce("cleared");
+    }
+  }
+
+  function boardBlur(): void {
+    if (keyboardCursor === null) return;
+    keyboardCursor = null;
+    renderMarks();
+  }
+
   board.addEventListener("pointerdown", pointerDown);
   board.addEventListener("pointermove", pointerMove);
   board.addEventListener("pointerup", pointerUp);
   board.addEventListener("pointercancel", pointerCancel);
   board.addEventListener("lostpointercapture", lostPointerCapture);
   board.addEventListener("contextmenu", contextMenu);
+  board.addEventListener("keydown", keyDown);
+  board.addEventListener("blur", boardBlur);
 
   renderPosition(position);
   renderMarks();
@@ -1265,6 +1361,7 @@ export function createChessboard(
       // so the deferred mark pass observes the post-render map.
       reconcilePieces();
     }
+    if (plan.interactionChanged) applyKeyboardSemantics();
     if (plan.marksDirty) renderMarks();
     if (plan.annotationsDirty) renderVisibleAnnotations(annotations);
   }
@@ -1360,15 +1457,19 @@ export function createChessboard(
       destroyed = true;
       clearDragVisual();
       clearDrawVisual();
+      keyboardCursor = null;
       board.removeEventListener("pointerdown", pointerDown);
       board.removeEventListener("pointermove", pointerMove);
       board.removeEventListener("pointerup", pointerUp);
       board.removeEventListener("pointercancel", pointerCancel);
       board.removeEventListener("lostpointercapture", lostPointerCapture);
       board.removeEventListener("contextmenu", contextMenu);
+      board.removeEventListener("keydown", keyDown);
+      board.removeEventListener("blur", boardBlur);
       nodes.clear();
       for (const mark of markNodes.values()) mark.remove();
       markNodes.clear();
+
       annotationNodes.clear();
       board.remove();
     },
@@ -1388,6 +1489,7 @@ function collectMarks(
   position: Position,
   lastMove: LastMove | undefined,
   checkedSquare: Square | undefined,
+  cursor: Square | undefined,
 ): Mark[] {
   const marks: Mark[] = [];
   if (selected) {
@@ -1431,6 +1533,14 @@ function collectMarks(
       occupied: false,
     });
   }
+  if (cursor !== undefined) {
+    marks.push({
+      key: markKey("cursor", cursor),
+      square: cursor,
+      kind: "cursor",
+      occupied: position.has(cursor),
+    });
+  }
   return marks;
 }
 
@@ -1463,6 +1573,13 @@ function validateSquare(square: string): asserts square is Square {
 function validateColor(value: string, name: string): Color {
   if (value !== "white" && value !== "black") {
     throw new TypeError(`${name} must be white or black`);
+  }
+  return value;
+}
+
+function validateBoolean(value: unknown, name: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new TypeError(`${name} must be a boolean`);
   }
   return value;
 }
@@ -1616,10 +1733,15 @@ function validateInteraction(value: Interaction): Interaction {
   const annotationGestures = validateAnnotationGestures(
     value.annotationGestures,
   );
+  const keyboard =
+    value.keyboard === undefined
+      ? undefined
+      : validateBoolean(value.keyboard, "interaction.keyboard");
   return {
     destinations,
     onEvent: value.onEvent,
     ...(annotationGestures !== undefined ? { annotationGestures } : {}),
+    ...(keyboard !== undefined ? { keyboard } : {}),
   };
 }
 

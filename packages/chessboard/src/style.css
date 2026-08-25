@@ -8,6 +8,7 @@
   --pw-capture-color: rgba(20, 85, 180, 0.6);
   --pw-last-move-color: rgba(155, 199, 0, 0.41);
   --pw-check-color: rgba(230, 0, 0, 0.65);
+  --pw-cursor-color: rgba(230, 145, 0, 0.5);
   --pw-coordinate-on-light: #1f1f1f;
   --pw-coordinate-on-dark: #1f1f1f;
   position: relative;
@@ -219,4 +220,23 @@
   text-transform: uppercase;
   align-items: flex-start;
   justify-content: flex-start;
+}
+
+.pw-mark-cursor {
+  background: var(--pw-cursor-color);
+}
+
+.pw-board:focus-visible {
+  outline: 2px solid var(--pw-cursor-color);
+  outline-offset: -2px;
+}
+
+/* Screen-reader-only live region. */
+.pw-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  pointer-events: none;
 }

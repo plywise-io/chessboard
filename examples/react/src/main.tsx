@@ -98,8 +98,9 @@ function legalDestinations(
 }
 
 function lastEventLabel(event: InteractionEvent): string {
-  if (event.type === "select") return `select ${event.square}`;
-  if (event.type === "clear") return "clear";
+  if (event.type === "select")
+    return `select ${event.square} (${event.origin})`;
+  if (event.type === "clear") return `clear (${event.origin})`;
   if (event.type === "circle") return `circle ${event.square}`;
   if (event.type === "arrow") return `arrow ${event.from}→${event.to}`;
   return `move ${event.from}→${event.to} (${event.origin})`;
@@ -161,6 +162,7 @@ function App() {
     PieceSetName | "cburnett" | "glyphs"
   >("cburnett");
   const [themeName, setThemeName] = useState<BoardThemeName>("brown");
+  const [keyboardEnabled, setKeyboardEnabled] = useState(true);
   const stateRef = useRef({ position });
   useEffect(() => {
     stateRef.current.position = position;
@@ -232,8 +234,13 @@ function App() {
     }
   }, []);
   const interaction = useMemo<Interaction>(
-    () => ({ destinations, onEvent, annotationGestures: ANNOTATION_GESTURES }),
-    [destinations, onEvent],
+    () => ({
+      destinations,
+      onEvent,
+      annotationGestures: ANNOTATION_GESTURES,
+      keyboard: keyboardEnabled,
+    }),
+    [destinations, onEvent, keyboardEnabled],
   );
   const presentation = useMemo<Presentation>(
     () => ({
@@ -381,13 +388,11 @@ function App() {
         </button>
         <button
           type="button"
-          onClick={() => {
-            setPosition(initialPosition());
-            setSelected(undefined);
-            setLastMove(undefined);
-          }}
+          aria-pressed={keyboardEnabled}
+          data-testid="toggle-keyboard"
+          onClick={() => setKeyboardEnabled((prev) => !prev)}
         >
-          Reset position
+          {keyboardEnabled ? "Disable" : "Enable"} keyboard
         </button>
       </div>
       <p

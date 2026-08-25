@@ -2485,3 +2485,360 @@ test("coordinates: edge mode keeps 16 edge labels", () => {
   assert.equal(host.querySelectorAll(".pw-coordinate").length, 16);
   assert.equal(host.querySelectorAll(".pw-coordinate-inside").length, 0);
 });
+
+// Slice-08: opt-in keyboard input
+
+/**
+ * Dispatch a keydown against the .pw-board element. JSDOM delivers
+ * KeyboardEvent normally; no layout is involved.
+ */
+function dispatchKey(host, key) {
+  const board = host.querySelector(".pw-board");
+  return board.dispatchEvent(
+    new host.ownerDocument.defaultView.KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key,
+    }),
+  );
+}
+
+function keyboardBoard(position, { presentation, ...config } = {}) {
+  return makeBoard(position, {
+    ...config,
+    interaction: {
+      destinations: new Map([["e2", ["e4"]]]),
+      keyboard: true,
+      onEvent: () => {},
+      ...(config.interaction ?? {}),
+    },
+    presentation,
+  });
+}
+
+test("keyboard: opting in switches role to application and exposes tabindex", () => {
+  const { host } = keyboardBoard(new Map());
+  const board = host.querySelector(".pw-board");
+  assert.equal(board.getAttribute("role"), "application");
+  assert.equal(board.getAttribute("tabindex"), "0");
+});
+
+test("keyboard: default role stays img without tabindex when not opted in", () => {
+  const { host } = makeBoard(new Map(), {
+    interaction: { destinations: new Map(), onEvent: () => {} },
+  });
+  const board = host.querySelector(".pw-board");
+  assert.equal(board.getAttribute("role"), "img");
+  assert.equal(board.getAttribute("tabindex"), null);
+});
+
+test("keyboard: omitting interaction leaves the default img role", () => {
+  const { host } = makeBoard(new Map());
+  const board = host.querySelector(".pw-board");
+  assert.equal(board.getAttribute("role"), "img");
+  assert.equal(board.getAttribute("tabindex"), null);
+});
+
+test("keyboard: arrow keys move the cursor square by square and emit nothing", () => {
+  const events = [];
+  const { host } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      keyboard: true,
+      onEvent: (event) => events.push(event),
+    },
+  });
+
+  dispatchKey(host, "ArrowRight");
+  assert.equal(host.querySelector(".pw-mark-cursor")?.dataset.square, "b1");
+  dispatchKey(host, "ArrowUp");
+  assert.equal(host.querySelector(".pw-mark-cursor")?.dataset.square, "b2");
+  assert.deepEqual(events, []);
+});
+
+test("keyboard: cursor starts at the visually bottom-left square", () => {
+  const white = keyboardBoard(new Map());
+  dispatchKey(white.host, "ArrowDown");
+  assert.equal(
+    white.host.querySelector(".pw-mark-cursor")?.dataset.square,
+    "a1",
+  );
+
+  const black = makeBoard(new Map(), {
+    orientation: "black",
+    interaction: {
+      destinations: new Map(),
+      keyboard: true,
+      onEvent: () => {},
+    },
+  });
+  // Screen-relative arrows: under black, h1 is bottom-left, so Right moves
+  // visually right toward g1.
+  dispatchKey(black.host, "ArrowRight");
+  assert.equal(
+    black.host.querySelector(".pw-mark-cursor")?.dataset.square,
+    "g1",
+  );
+});
+
+test("keyboard: arrows are screen-relative under black orientation", () => {
+  const { host, board } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      keyboard: true,
+      onEvent: () => {},
+    },
+  });
+  board.set({ orientation: "black" });
+  dispatchKey(host, "ArrowRight");
+  assert.equal(host.querySelector(".pw-mark-cursor")?.dataset.square, "g1");
+  // Under black, rank 1 renders at the visual top, so Down moves to g2.
+  dispatchKey(host, "ArrowDown");
+  assert.equal(host.querySelector(".pw-mark-cursor")?.dataset.square, "g2");
+});
+
+test("keyboard: cursor clamps at the board edges instead of wrapping", () => {
+  const { host } = keyboardBoard(new Map());
+
+  for (let i = 0; i < 5; i += 1) dispatchKey(host, "ArrowLeft");
+  assert.equal(host.querySelector(".pw-mark-cursor")?.dataset.square, "a1");
+
+  dispatchKey(host, "ArrowRight");
+  for (let i = 0; i < 5; i += 1) dispatchKey(host, "ArrowDown");
+  assert.equal(host.querySelector(".pw-mark-cursor")?.dataset.square, "b1");
+
+  for (let i = 0; i < 12; i += 1) dispatchKey(host, "ArrowUp");
+  assert.equal(host.querySelector(".pw-mark-cursor")?.dataset.square, "b8");
+});
+
+test("keyboard: Enter on a selectable square emits select with keyboard origin", () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        keyboard: true,
+        onEvent: (event) => events.push(event),
+      },
+    },
+  );
+
+  // a1 -> e2: four rights, one up.
+  for (const key of ["ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight"]) {
+    dispatchKey(host, key);
+  }
+  dispatchKey(host, "ArrowUp");
+  dispatchKey(host, "Enter");
+
+  assert.deepEqual(events, [
+    { type: "select", square: "e2", origin: "keyboard" },
+  ]);
+});
+
+test("keyboard: Space presses like Enter", () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        keyboard: true,
+        onEvent: (event) => events.push(event),
+      },
+    },
+  );
+
+  for (const key of ["ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight"]) {
+    dispatchKey(host, key);
+  }
+  dispatchKey(host, "ArrowUp");
+  dispatchKey(host, " ");
+
+  assert.deepEqual(events, [
+    { type: "select", square: "e2", origin: "keyboard" },
+  ]);
+});
+
+test("keyboard: Enter on a destination after select emits move with keyboard origin", () => {
+  const events = [];
+  const { host, board } = makeBoard(
+    new Map([
+      ["e2", { color: "white", role: "pawn" }],
+      ["e4", { color: "black", role: "pawn" }],
+    ]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        keyboard: true,
+        onEvent: (event) => events.push(event),
+      },
+    },
+  );
+
+  for (const key of ["ArrowRight", "ArrowRight", "ArrowRight", "ArrowRight"]) {
+    dispatchKey(host, key);
+  }
+  dispatchKey(host, "ArrowUp");
+  dispatchKey(host, "Enter"); // select e2
+  // Selection is controlled: the caller feeds it back before the
+  // destination resolves as a move target.
+  board.set({ presentation: { selected: "e2" } });
+  dispatchKey(host, "ArrowUp");
+  dispatchKey(host, "ArrowUp");
+  dispatchKey(host, "Enter"); // move to e4
+  assert.deepEqual(events, [
+    { type: "select", square: "e2", origin: "keyboard" },
+    { type: "move", from: "e2", to: "e4", origin: "keyboard" },
+  ]);
+});
+
+test("keyboard: Escape clears the selection intent and drops the cursor", () => {
+  const events = [];
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        keyboard: true,
+        onEvent: (event) => events.push(event),
+      },
+      presentation: { selected: "e2" },
+    },
+  );
+
+  dispatchKey(host, "ArrowRight"); // place the cursor on b1
+  dispatchKey(host, "Escape");
+  assert.equal(host.querySelector(".pw-mark-cursor"), null);
+  assert.deepEqual(events, [{ type: "clear", origin: "keyboard" }]);
+});
+
+test("keyboard: blur clears the cursor and emits nothing", () => {
+  const events = [];
+  const { host, dom } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      keyboard: true,
+      onEvent: (event) => events.push(event),
+    },
+  });
+
+  dispatchKey(host, "ArrowUp");
+  assert.equal(host.querySelector(".pw-mark-cursor")?.dataset.square, "a2");
+
+  host.querySelector(".pw-board").dispatchEvent(new dom.window.Event("blur"));
+  assert.equal(host.querySelector(".pw-mark-cursor"), null);
+  assert.deepEqual(events, []);
+});
+
+test("keyboard: live region announces cursor squares and move intents", () => {
+  const { host } = makeBoard(
+    new Map([["e2", { color: "white", role: "pawn" }]]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e4"]]]),
+        keyboard: true,
+        onEvent: () => {},
+      },
+      presentation: { selected: "e2" },
+    },
+  );
+  const live = host.querySelector(".pw-live");
+  assert.ok(live, "live region rendered");
+  assert.equal(live.getAttribute("aria-live"), "polite");
+
+  dispatchKey(host, "ArrowRight");
+  assert.equal(live.textContent, "b1");
+
+  dispatchKey(host, "ArrowRight");
+  dispatchKey(host, "ArrowRight");
+  dispatchKey(host, "ArrowRight");
+  dispatchKey(host, "ArrowUp");
+  assert.equal(live.textContent, "e2, white pawn");
+
+  dispatchKey(host, "ArrowUp");
+  dispatchKey(host, "ArrowUp");
+  dispatchKey(host, "Enter");
+  assert.equal(live.textContent, "e2 to e4");
+});
+
+test("keyboard: setting interaction to null disables semantics and drops state", () => {
+  const events = [];
+  const { host, board } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      keyboard: true,
+      onEvent: (event) => events.push(event),
+    },
+  });
+
+  dispatchKey(host, "ArrowUp");
+  assert.notEqual(host.querySelector(".pw-mark-cursor"), null);
+
+  board.set({ interaction: null });
+  const boardEl = host.querySelector(".pw-board");
+  assert.equal(boardEl.getAttribute("role"), "img");
+  assert.equal(boardEl.getAttribute("tabindex"), null);
+  assert.equal(host.querySelector(".pw-mark-cursor"), null);
+
+  dispatchKey(host, "Enter");
+  assert.deepEqual(events, []);
+});
+
+test("keyboard: re-enabling keyboard restores application role", () => {
+  const { host, board } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      keyboard: true,
+      onEvent: () => {},
+    },
+  });
+  const boardEl = host.querySelector(".pw-board");
+  assert.equal(boardEl.getAttribute("role"), "application");
+
+  board.set({ interaction: { destinations: new Map(), onEvent: () => {} } });
+  assert.equal(boardEl.getAttribute("role"), "img");
+  assert.equal(boardEl.getAttribute("tabindex"), null);
+
+  board.set({
+    interaction: {
+      destinations: new Map(),
+      keyboard: true,
+      onEvent: () => {},
+    },
+  });
+  assert.equal(boardEl.getAttribute("role"), "application");
+  assert.equal(boardEl.getAttribute("tabindex"), "0");
+});
+
+test("keyboard: validateInteraction rejects non-boolean keyboard values", () => {
+  assert.throws(
+    () =>
+      makeBoard(new Map(), {
+        interaction: {
+          destinations: new Map(),
+          keyboard: "yes",
+          onEvent: () => {},
+        },
+      }),
+    /interaction.keyboard must be a boolean/,
+  );
+});
+
+test("keyboard: destroy removes listeners and clears transient cursor", () => {
+  const { host, board } = makeBoard(new Map(), {
+    interaction: {
+      destinations: new Map(),
+      keyboard: true,
+      onEvent: () => {},
+    },
+  });
+
+  dispatchKey(host, "ArrowUp");
+  assert.notEqual(host.querySelector(".pw-mark-cursor"), null);
+
+  board.destroy();
+  assert.equal(host.querySelector(".pw-mark-cursor"), null);
+  board.destroy();
+  assert.equal(host.querySelector(".pw-board"), null);
+});

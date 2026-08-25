@@ -1,5 +1,15 @@
 # @plywise/chessboard-react
 
+## 0.2.2
+
+### Patch Changes
+
+- 88d7a57: Forward single-piece moves and same-commit controlled state through the atomic `move()` path.
+- Updated dependencies [88d7a57]
+- Updated dependencies [88d7a57]
+- Updated dependencies [88d7a57]
+  - @plywise/chessboard@0.3.3
+
 ## 0.2.1
 
 ### Patch Changes

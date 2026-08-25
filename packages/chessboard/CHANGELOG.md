@@ -1,5 +1,13 @@
 # @plywise/chessboard
 
+## 0.3.3
+
+### Patch Changes
+
+- 88d7a57: Coalesce mark and annotation reconciliation per update, and allow `move()` to apply an optional atomic update.
+- 88d7a57: Expose `--pw-animation-easing` with the default `cubic-bezier(0.65, 0, 0.35, 1)`.
+- 88d7a57: Skip DOM writes for structurally equal annotations, including metadata-only changes.
+
 ## 0.3.2
 
 ### Patch Changes

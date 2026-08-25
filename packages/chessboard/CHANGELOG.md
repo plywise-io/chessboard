@@ -1,5 +1,17 @@
 # @plywise/chessboard
 
+## 0.4.0
+
+### Minor Changes
+
+- f99522e: Adds an `"inside"` coordinates mode rendering the full square name on every square. `coordinates` now accepts `boolean | CoordinatesMode`, and `CoordinatesMode` is exported as `"edge" | "inside"`; booleans keep their current meaning.
+- 3545b50: Opt-in keyboard input: `interaction.keyboard: true` switches the board's
+  role to `application` and exposes `tabindex="0"`. Arrow keys move a cursor
+  mark (`.pw-mark-cursor`, controlled by `--pw-cursor-color`), Enter / Space
+  emit `select` / `move` / `clear`, and Escape emits `clear` — all with
+  `origin: "keyboard"`. A screen-reader live region (`.pw-live`,
+  `aria-live="polite"`) announces the focused square and the piece on it.
+
 ## 0.3.3
 
 ### Patch Changes

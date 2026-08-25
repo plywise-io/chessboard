@@ -1,5 +1,17 @@
 # @plywise/chessboard-react
 
+## 0.3.0
+
+### Minor Changes
+
+- f99522e: Adds an `"inside"` coordinates mode rendering the full square name on every square. `coordinates` now accepts `boolean | CoordinatesMode`, and `CoordinatesMode` is exported as `"edge" | "inside"`; booleans keep their current meaning.
+
+### Patch Changes
+
+- Updated dependencies [f99522e]
+- Updated dependencies [3545b50]
+  - @plywise/chessboard@0.4.0
+
 ## 0.2.2
 
 ### Patch Changes

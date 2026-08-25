@@ -207,7 +207,7 @@ Animation duration is non-negative; `0` switches to instant updates. Position up
 
 ## Coordinates
 
-`coordinates` accepts `boolean | "edge" | "inside"` (default off). When enabled, the host element carries `data-coordinates="edge"` or `data-coordinates="inside"`; when off, `"none"`. `true` is equivalent to `"edge"`, `false` (or omitted) turns coordinates off; any other value throws `TypeError`. `"edge"` renders the 16 orientation-aware a–h / 1–8 labels in a `.pw-coordinates` layer. `"inside"` renders 64 `.pw-coordinate.pw-coordinate-inside` spans — one per square — each carrying `data-square="<name>"`, the full square name as text (e.g. `"e4"`), positioned on its cell, and a `data-parity` of `"light"` or `"dark"` so themes can color in-square labels. Flipping orientation repaints the inside labels in place; toggling at runtime via `set({ coordinates })` switches layers atomically.
+`coordinates` accepts `boolean | CoordinatesMode` (where `CoordinatesMode` is `"edge" | "inside"`, default off). When enabled, the host element carries `data-coordinates="edge"` or `data-coordinates="inside"`; when off, `"none"`. `true` is equivalent to `"edge"`, `false` (or omitted) turns coordinates off; any other value throws `TypeError`. `"edge"` renders the 16 orientation-aware a–h / 1–8 labels in a `.pw-coordinates` layer. `"inside"` renders 64 `.pw-coordinate.pw-coordinate-inside` spans — one per square — each carrying `data-square="<name>"`, the full square name as text (e.g. `"e4"`), positioned on its cell, and a `data-parity` of `"light"` or `"dark"` so themes can color in-square labels. Flipping orientation repaints the inside labels in place; toggling at runtime via `set({ coordinates })` swaps modes without recreating the board.
 
 Pieces come from the vendored **Cburnett** default artwork, embedded in the
 bundle as data URIs so rendering never touches a network. Pass a `pieceSet`
@@ -286,11 +286,11 @@ The renderer exposes the board as one labelled image. `ariaLabel` in the core pa
 - `presentation` (`{ selected?, lastMove?, checked? }`).
 - `annotations` (`Annotation[]`).
 - `visibleLayers` (`ReadonlySet<string> | undefined`; omitted shows all, empty hides all).
-- `coordinates` (`boolean | "edge" | "inside"`, default `false`) and the remaining `ChessboardConfig` fields (`orientation`, `boardLabel`, `animationMs`, `pieceSet`, `theme`).
+- `coordinates` (`boolean | CoordinatesMode`, default `false`; `CoordinatesMode` is `"edge" | "inside"`) and the remaining `ChessboardConfig` fields (`orientation`, `boardLabel`, `animationMs`, `pieceSet`, `theme`).
 
 The adapter creates exactly one core renderer instance, forwards every prop change through that instance, keeps the latest `onEvent` available without recreating the board, and destroys the instance on unmount. No React state is used for board DOM, drag coordinates, or transient pointer state; pointer movement never triggers a React render.
 
-Re-exported domain types include `Color`, `File`, `Rank`, `Role`, `Square`, `Piece`, `Position`, `Annotation`, `ArrowAnnotation`, `CircleAnnotation`, `AnnotationGesture`, `AnnotationModifier`, `JsonValue`, `Destinations`, `Interaction`, `InteractionEvent`, `Presentation`, `LastMove`, `ChessboardConfig`, and `ChessboardUpdate`.
+Re-exported domain types include `Color`, `CoordinatesMode`, `File`, `Rank`, `Role`, `Square`, `Piece`, `Position`, `Annotation`, `ArrowAnnotation`, `CircleAnnotation`, `AnnotationGesture`, `AnnotationModifier`, `JsonValue`, `Destinations`, `Interaction`, `InteractionEvent`, `Presentation`, `LastMove`, `ChessboardConfig`, and `ChessboardUpdate`.
 
 ## Support contract
 

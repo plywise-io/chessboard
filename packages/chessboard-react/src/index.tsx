@@ -4,6 +4,7 @@ import type {
   Chessboard as ChessboardInstance,
   ChessboardUpdate,
   Color,
+  CoordinatesMode,
   Interaction,
   PieceSources,
   Position,
@@ -27,6 +28,7 @@ export type {
   CircleAnnotation,
   ClearEvent,
   Color,
+  CoordinatesMode,
   Destinations,
   File,
   Interaction,
@@ -52,7 +54,7 @@ export interface ChessboardProps
   readonly orientation?: Color;
   readonly boardLabel?: string;
   readonly animationMs?: number;
-  readonly coordinates?: boolean | "edge" | "inside";
+  readonly coordinates?: boolean | CoordinatesMode;
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
   readonly annotations?: readonly Annotation[];

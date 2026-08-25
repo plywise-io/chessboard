@@ -35,7 +35,7 @@ export function Board({ position, destinations, lastMove }) {
 - `boardLabel?: string` — accessible label. Defaults to `"Chessboard"`.
 - `animationMs?: number` — non-negative. `0` switches to instant updates.
 - `visibleLayers?: ReadonlySet<string>` — omitted shows every layer; empty hides every annotation.
-- `coordinates?: boolean | "edge" | "inside"` — default `false`. `"edge"` (or `true`) renders the 16-file/8-rank edge labels in a `.pw-coordinates` layer; `"inside"` renders the full square name on every square (64 labels). See the [repository README](https://github.com/plywise-io/chessboard#readme) for the `data-coordinates` contract and per-square `data-square`/`data-parity` attributes.
+- `coordinates?: boolean | CoordinatesMode` — default `false`; `CoordinatesMode` is `"edge" | "inside"`. `"edge"` (or `true`) renders the 16-file/8-rank edge labels in a `.pw-coordinates` layer; `"inside"` renders the full square name on every square (64 labels). See the [repository README](https://github.com/plywise-io/chessboard#readme) for the `data-coordinates` contract and per-square `data-square`/`data-parity` attributes.
 - `pieceSet?: PieceSources | string | null` — controls the piece artwork. Omission renders the vendored Cburnett default; a `PieceSources` object (raw SVG sources for each `wK..bP` code) is served as `data:image/svg+xml` so it never reaches the network; a plain base-URL string points at a directory of `{w|b}{P,N,B,R,Q,K}.svg` files for callers who self-host; `null` restores Unicode glyphs. The adapter forwards `PieceSources`-valued props untouched.
 - All other `<div>` props (except `children`) are forwarded to the host element.
 
@@ -46,7 +46,7 @@ import type {
   Annotation, ArrowAnnotation, CircleAnnotation,
   AnnotationGesture, AnnotationModifier,
   JsonValue,
-  Color, File, LastMove, Piece, Position, Presentation, Rank, Role,
+  Color, CoordinatesMode, File, LastMove, Piece, Position, Presentation, Rank, Role,
   Square, Destinations, Interaction, InteractionEvent,
   PieceSources, pieceSets,
   ChessboardConfig, ChessboardUpdate,

@@ -1,6 +1,7 @@
 import type {
   Annotation,
   AnnotationGesture,
+  CoordinatesMode,
   Interaction,
   InteractionEvent,
   Piece,
@@ -152,7 +153,7 @@ function App() {
   const [showStateMarks, setShowStateMarks] = useState(false);
   const [lastMove, setLastMove] = useState<Presentation["lastMove"]>();
   const [coordinatesMode, setCoordinatesMode] = useState<
-    boolean | "edge" | "inside"
+    boolean | CoordinatesMode
   >(false);
   const [hiddenLayers, setHiddenLayers] = useState<ReadonlySet<string>>(
     () => new Set(),

@@ -17,6 +17,8 @@ import {
 } from "./internal/values.js";
 
 export type Color = "white" | "black";
+/** Named coordinate-display modes; `boolean` stays accepted for compatibility. */
+export type CoordinatesMode = "edge" | "inside";
 export type File = BoardFile;
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type Role = BoardRole;
@@ -178,7 +180,7 @@ export interface ChessboardConfig {
   readonly ariaLabel?: string;
   readonly animationMs?: number;
   /** Coordinates display: `"edge"` (files a–h bottom, ranks 1–8 left), `"inside"` (full square name on every square), boolean kept for compatibility (`true` = `"edge"`, `false` = off). */
-  readonly coordinates?: boolean | "edge" | "inside";
+  readonly coordinates?: boolean | CoordinatesMode;
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
   /**
@@ -206,8 +208,8 @@ export interface ChessboardUpdate {
   readonly orientation?: Color;
   readonly ariaLabel?: string;
   readonly animationMs?: number;
-  readonly coordinates?: boolean | "edge" | "inside";
-  /** Same contract as on {@link ChessboardConfig}. */
+  /** Same coordinate-display contract as on {@link ChessboardConfig}. */
+  readonly coordinates?: boolean | CoordinatesMode;
   readonly interaction?: Interaction | null;
   readonly presentation?: Presentation;
   /**
@@ -1295,7 +1297,7 @@ export function createChessboard(
     }
     if (plan.coordinatesChanged) {
       coordinates = validateCoordinates(
-        update.coordinates as boolean | "edge" | "inside",
+        update.coordinates as boolean | CoordinatesMode,
         "coordinates",
       );
     }
@@ -1592,9 +1594,9 @@ function validateAnimation(value: number): number {
 }
 
 function validateCoordinates(
-  value: boolean | "edge" | "inside",
+  value: boolean | CoordinatesMode,
   name: string,
-): false | "edge" | "inside" {
+): false | CoordinatesMode {
   if (value === true) return "edge";
   if (value === false) return false;
   if (value === "edge" || value === "inside") return value;

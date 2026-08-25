@@ -5,12 +5,12 @@ html {
 }
 
 body {
-  min-width: 20rem;
   min-height: 100vh;
   margin: 0;
 }
 
 main {
+  box-sizing: border-box;
   width: min(90vmin, 40rem);
   margin: 0 auto;
   padding: 2rem 1rem;
@@ -36,6 +36,11 @@ h1 {
   border-radius: 0.375rem;
   padding: 0.375rem 0.625rem;
   cursor: pointer;
+}
+
+.controls button:focus-visible {
+  outline: 2px solid #5e9b66;
+  outline-offset: 2px;
 }
 
 .controls button[aria-pressed="true"] {

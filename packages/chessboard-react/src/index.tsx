@@ -172,10 +172,10 @@ export function Chessboard({
       theme,
     };
 
-    // A single-piece position change routes through the renderer's `move`
-    // so the moving piece keeps its DOM node and transform transition.
-    // Promotions and castling change or move more than one piece and fall
-    // back to a full position replacement.
+    // A single-piece position change routes through the renderer's atomic
+    // move path, so the moving piece and same-commit controlled state keep
+    // their DOM nodes and reconcile marks once. Promotions and castling
+    // change or move more than one piece and fall back to position replacement.
     const singlePieceMove =
       prior.position === position
         ? undefined
@@ -203,16 +203,11 @@ export function Chessboard({
       ...(prior.theme === theme ? {} : { theme }),
     };
     if (singlePieceMove) {
-      const { position: _position, ...companion } = update;
-      if (Object.keys(companion).length > 0) {
-        instance.current?.move(
-          singlePieceMove.from,
-          singlePieceMove.to,
-          companion,
-        );
-      } else {
-        instance.current?.move(singlePieceMove.from, singlePieceMove.to);
-      }
+      instance.current?.move(
+        singlePieceMove.from,
+        singlePieceMove.to,
+        Object.keys(update).length > 0 ? update : undefined,
+      );
     } else if (Object.keys(update).length > 0) {
       instance.current?.set(update);
     }

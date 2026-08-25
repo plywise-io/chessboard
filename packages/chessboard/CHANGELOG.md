@@ -5,6 +5,7 @@
 ### Patch Changes
 
 - adb32a2: Batch companion updates with a single-piece move, reconcile board marks once per update, and skip unchanged annotation DOM writes. Add WebKit-safe text-selection handling and a configurable cubic move easing.
+- Fix initial piece transitions, honor reduced-motion preferences, improve coordinate-label contrast, and make unused piece sets tree-shakeable.
 
 ## 0.3.1
 

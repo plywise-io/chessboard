@@ -181,17 +181,6 @@ function teardownAll() {
   arena.replaceChildren();
 }
 
-/** Compute inter-event intervals from an ordered timestamp series. */
-function computeIntervals(timestamps) {
-  const out = [];
-  for (let i = 1; i < timestamps.length; i++) {
-    const prev = timestamps[i - 1];
-    const curr = timestamps[i];
-    if (prev !== undefined && curr !== undefined) out.push(curr - prev);
-  }
-  return out;
-}
-
 function runSamples(measure, { warmup = 3, samples = 30, tracker } = {}) {
   for (let i = 0; i < warmup; i++) measure(i);
   // Reset the tracker so node deltas cover only the timed samples,
@@ -212,19 +201,14 @@ function runSamples(measure, { warmup = 3, samples = 30, tracker } = {}) {
 }
 
 /**
- * Per-pointermove timing installed on the drag board's host. The renderer
- * already handles pointer events; this listener only counts the events
- * reaching the host and samples per-event pipeline time so the harness
- * can report pointer event throughput without depending on the renderer's
- * internals. The MutationObserver on the host's board-owned subtree
- * separately counts coalesced DOM writes for frame-coalescing evidence.
+ * Counts pointer events delivered to the board host. This describes the
+ * Playwright input cadence; renderer frame work is intentionally not inferred
+ * from it.
  */
 function attachPointerTiming(host) {
   const timing = {
     pointerEvents: 0,
     perEvent: [],
-    rafHandle: null,
-    perFrameDuration: [],
     lastPointerAt: 0,
   };
   const onPointerMove = () => {
@@ -237,26 +221,15 @@ function attachPointerTiming(host) {
   };
   host.addEventListener("pointermove", onPointerMove, { passive: true });
 
-  // Mirror rAF so the harness can report the cadence of coalesced frames
-  // actually painted by the browser. rAF callbacks run once per display
-  // refresh; counts of completed ticks approximate coalesced frame rate.
-  const tick = () => {
-    timing.perFrameDuration.push(performance.now());
-    timing.rafHandle = requestAnimationFrame(tick);
-  };
-  timing.rafHandle = requestAnimationFrame(tick);
-
   return {
     snapshot() {
       return {
         pointerEvents: timing.pointerEvents,
         perEvent: [...timing.perEvent],
-        perFrameDuration: [...timing.perFrameDuration],
       };
     },
     detach() {
       host.removeEventListener("pointermove", onPointerMove);
-      if (timing.rafHandle !== null) cancelAnimationFrame(timing.rafHandle);
     },
   };
 }
@@ -291,18 +264,27 @@ function runScenario(name, params = {}) {
       const perSample = Number(params.perSample ?? 25);
       const sampleCount = Math.ceil(iterations / perSample);
       const durations = new Array(sampleCount);
+      const perIteration = new Array(iterations);
       let i = 0;
       for (let s = 0; s < sampleCount; s++) {
         const start = performance.now();
         const end = Math.min(iterations, i + perSample);
         for (; i < end; i++) {
+          const opStart = performance.now();
           board.set({ position: alternatingPosition(i) });
+          perIteration[i] = performance.now() - opStart;
         }
         durations[s] = performance.now() - start;
       }
       const deltas = nodes.snapshot();
       teardownAll();
-      return { durations, nodes: deltas, iterations };
+      return {
+        durations,
+        perIteration,
+        iterationsPerSample: perSample,
+        nodes: deltas,
+        iterations,
+      };
     }
     case "arbitraryReplacement": {
       teardownAll();
@@ -340,6 +322,24 @@ function runScenario(name, params = {}) {
       for (let i = 0; i < count; i++) {
         managed.push(makeBoard({ id: `multi-${i}`, withInteraction: true }));
       }
+      // Capture board positions before any timing so the harness can
+      // verify every requested board actually fits inside the requested
+      // viewport — multi-board throughput is only meaningful when all
+      // boards are rendered and visible.
+      const lastHost = managed.at(-1)?.host;
+      const lastBox = lastHost ? lastHost.getBoundingClientRect() : null;
+      const requestedViewport = {
+        width: Number(params.viewportWidth ?? 0),
+        height: Number(params.viewportHeight ?? 0),
+      };
+      const visibility = {
+        requestedViewport,
+        boardCount: count,
+        lastBoardBottom: lastBox ? lastBox.bottom : 0,
+        lastBoardRight: lastBox ? lastBox.right : 0,
+        firstBoardTop: managed[0]?.host?.getBoundingClientRect().top ?? 0,
+        firstBoardLeft: managed[0]?.host?.getBoundingClientRect().left ?? 0,
+      };
       const iterations = Number(params.iterations ?? 50);
       const sampleCount = Math.min(samples, 20);
       const totals = { created: 0, removed: 0, attributeRecords: 0 };
@@ -372,7 +372,13 @@ function runScenario(name, params = {}) {
         totals.attributeRecords += snap.attributeRecords;
       }
       teardownAll();
-      return { durations, nodes: totals, count, iterations };
+      return {
+        durations,
+        nodes: totals,
+        count,
+        iterations,
+        visibility,
+      };
     }
     case "prepareDragSession": {
       teardownAll();
@@ -416,13 +422,8 @@ function runScenario(name, params = {}) {
       teardownAll();
       dragSession = null;
       return {
-        // `durations` is the cadence of coalesced frames painted while
-        // the drag ran. Deltas between adjacent timestamps approximate
-        // the inter-frame interval, which the harness summarises.
-        durations: computeIntervals(timingSnapshot.perFrameDuration),
-        perEvent: timingSnapshot.perEvent,
+        pointerIntervals: timingSnapshot.perEvent,
         pointerEvents: timingSnapshot.pointerEvents,
-        frames: timingSnapshot.perFrameDuration.length,
         nodes: lastNodes,
       };
     }

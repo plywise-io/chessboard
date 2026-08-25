@@ -30,11 +30,11 @@ let out =
   "// Generated from packages/chessboard/assets/* — DO NOT EDIT.\n" +
   "// Regenerate with: node scripts/gen-piece-sets.mjs\n" +
   "// Licenses and provenance: see packages/chessboard/assets/SETS.md.\n\n";
-out +=
-  "/**\n * Raw SVG sources for the curated piece sets, keyed by `{w|b}{P,N,B,R,Q,K}`\n * piece codes. The renderer serves them to the DOM as `data:image/svg+xml`\n * URIs; no network access is involved.\n */\nexport const vendoredPieceSets = {\n";
 
 for (const [key, dir] of sets) {
-  out += `  ${key}: {\n`;
+  out +=
+    "/** Raw SVG sources keyed by `{w|b}{P,N,B,R,Q,K}` piece codes. */\n" +
+    `export const ${key} = {\n`;
   for (const code of codes) {
     // Normalize CRLF so the generated module stays formatter-stable; the
     // vendored files themselves remain pristine.
@@ -47,9 +47,8 @@ for (const [key, dir] of sets) {
     if (svg.includes("`") || svg.includes("${")) {
       throw new Error(`unsafe characters in ${dir}/${code}`);
     }
-    out += `    ${code}: \`\n${svg}\`,\n`;
+    out += `  ${code}: \`\n${svg}\`,\n`;
   }
-  out += "  },\n";
+  out += "};\n\n";
 }
-out += "};\n";
 writeFileSync("packages/chessboard/src/internal/pieceSets.gen.ts", out);

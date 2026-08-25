@@ -40,8 +40,8 @@ const SCENARIOS = [
   "arbitraryReplacement",
   "annotationReplacement",
   ...DRAG_BOARDS.map((count) => ({ name: "multiBoard", count })),
-  { name: "dragCoalescing", rateHz: 60, frames: DRAG_FRAMES },
-  { name: "dragCoalescing", rateHz: 120, frames: DRAG_FRAMES },
+  { name: "dragInput", rateHz: 60, frames: DRAG_FRAMES },
+  { name: "dragInput", rateHz: 120, frames: DRAG_FRAMES },
 ];
 
 const FILES_INDEX = new Map([
@@ -242,9 +242,9 @@ async function runDragScenario(page, { rateHz, frames }) {
     rateHz,
     framesRequested: frames,
     pointerEvents: result.pointerEvents ?? 0,
-    coalescedFrames: result.frames ?? 0,
-    duration: summarize(result.durations ?? []),
-    perEvent: summarize(result.perEvent ?? []),
+    // Playwright input cadence only; this is not renderer pipeline timing.
+    pointerInterval: summarize(result.pointerIntervals ?? []),
+    // Aggregate DOM mutations during the whole drag, not per-frame work.
     nodes: result.nodes ?? { created: 0, removed: 0, attributeRecords: 0 },
   };
 }
@@ -286,11 +286,11 @@ async function main() {
       const scenarioName =
         typeof scenario === "string" ? scenario : scenario.name;
       try {
-        if (scenarioName === "dragCoalescing") {
+        if (scenarioName === "dragInput") {
           const result = await runDragScenario(page, scenario);
           if (result.pointerEvents === 0) {
             throw new Error(
-              `dragCoalescing@${result.rateHz}Hz delivered no pointer events`,
+              `dragInput@${result.rateHz}Hz delivered no pointer events`,
             );
           }
           scenarios.push({ name: scenarioName, ...result });
@@ -298,9 +298,12 @@ async function main() {
         }
         if (scenarioName === "multiBoard") {
           const count = scenario.count;
+          const viewport = page.viewportSize() ?? { width: 0, height: 0 };
           const raw = await runJsScenario(page, scenarioName, {
             count,
             iterations: Number(process.env.PW_BENCH_MULTI_ITERATIONS ?? 50),
+            viewportWidth: viewport.width,
+            viewportHeight: viewport.height,
           });
           scenarios.push({
             name: `${scenarioName}-${count}`,
@@ -313,14 +316,19 @@ async function main() {
           continue;
         }
         if (scenarioName === "bulkNavigation") {
+          const iterationsPerSample = Number(
+            process.env.PW_BENCH_PER_SAMPLE ?? 25,
+          );
           const raw = await runJsScenario(page, scenarioName, {
             iterations: ITERATIONS,
+            perSample: iterationsPerSample,
           });
           scenarios.push({
             name: scenarioName,
             iterations: raw.iterations,
-            duration: summarize(raw.durations),
-            perSampleIterations: Number(process.env.PW_BENCH_PER_SAMPLE ?? 25),
+            iterationsPerSample,
+            batchDuration: summarize(raw.durations ?? []),
+            perIteration: summarize(raw.perIteration ?? []),
             nodes: raw.nodes,
           });
           continue;
@@ -386,7 +394,24 @@ function assertScenarioCorrectness(name, raw) {
 function assertMultiBoard(raw, count) {
   if (raw.nodes == null)
     throw new Error("multiBoard did not report node deltas");
-  return { boardCount: count };
+  const visibility = raw.visibility ?? {};
+  if (visibility.requestedViewport) {
+    const { width, height } = visibility.requestedViewport;
+    if (visibility.lastBoardBottom > height) {
+      throw new Error(
+        `multiBoard last board bottom (${visibility.lastBoardBottom}) exceeds viewport height (${height}); reduce count or resize arena`,
+      );
+    }
+    if (visibility.lastBoardRight > width) {
+      throw new Error(
+        `multiBoard last board right (${visibility.lastBoardRight}) exceeds viewport width (${width}); reduce count or resize arena`,
+      );
+    }
+  }
+  return {
+    boardCount: count,
+    visibility,
+  };
 }
 
 main().catch((error) => {

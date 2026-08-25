@@ -490,3 +490,101 @@ test("forwards pieceSet and theme props into the imperative board", async () => 
   await act(() => root.unmount());
   assert.equal(host.childElementCount, 0);
 });
+
+test("single-piece move with state updates reconciles marks once", async () => {
+  const dom = new JSDOM('<div id="root"></div>');
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const [{ act, createElement }, { createRoot }, { Chessboard }] =
+    await Promise.all([
+      import("react"),
+      import("react-dom/client"),
+      import("../dist/index.js"),
+    ]);
+  const host = document.querySelector("#root");
+  const root = createRoot(host);
+  const interaction = {
+    destinations: new Map([["e2", ["e3", "e4"]]]),
+    onEvent() {},
+  };
+  const position = new Map([
+    ["e2", { color: "white", role: "pawn" }],
+    ["d2", { color: "white", role: "pawn" }],
+  ]);
+  await act(() =>
+    root.render(
+      createElement(Chessboard, {
+        position,
+        interaction,
+        presentation: { selected: "e2" },
+      }),
+    ),
+  );
+  const piece = host.querySelector('[data-square="d2"]');
+  const records = [];
+  const observer = new dom.window.MutationObserver((entries) =>
+    records.push(...entries),
+  );
+  observer.observe(host, { attributes: true, childList: true, subtree: true });
+
+  await act(() =>
+    root.render(
+      createElement(Chessboard, {
+        position: new Map([
+          ["e2", { color: "white", role: "pawn" }],
+          ["d4", { color: "white", role: "pawn" }],
+        ]),
+        interaction: {
+          destinations: new Map([["e2", ["e3", "e4"]]]),
+          onEvent() {},
+        },
+        presentation: { selected: "e2" },
+      }),
+    ),
+  );
+
+  const destinationWrites = records.filter(
+    (record) =>
+      record.type === "attributes" &&
+      record.target.hasAttribute("data-mark") &&
+      record.attributeName === "data-destination",
+  );
+  assert.equal(destinationWrites.length, 2);
+  assert.strictEqual(host.querySelector('[data-square="d4"]'), piece);
+  await act(() => root.unmount());
+});
+
+test("stable-props parent re-render causes no board work", async () => {
+  const dom = new JSDOM('<div id="root"></div>');
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const [{ act, createElement }, { createRoot }, { Chessboard }] =
+    await Promise.all([
+      import("react"),
+      import("react-dom/client"),
+      import("../dist/index.js"),
+    ]);
+  const host = document.querySelector("#root");
+  const root = createRoot(host);
+  const props = {
+    position: new Map([["e2", { color: "white", role: "pawn" }]]),
+    interaction: {
+      destinations: new Map([["e2", ["e3"]]]),
+      onEvent() {},
+    },
+    presentation: { selected: "e2" },
+  };
+  await act(() => root.render(createElement(Chessboard, props)));
+  const records = [];
+  const observer = new dom.window.MutationObserver((entries) =>
+    records.push(...entries),
+  );
+  observer.observe(host, { attributes: true, childList: true, subtree: true });
+  await act(() => root.render(createElement(Chessboard, props)));
+  assert.equal(records.length, 0);
+  await act(() => root.unmount());
+});

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { createChessboard } from "../dist/index.js";
+import { cburnett, createChessboard } from "../dist/index.js";
 
 /**
  * Click a square on the board by client coordinates. JSDOM doesn't lay out,
@@ -750,6 +750,222 @@ test("annotation lifecycle and set-after-destroy", () => {
       }),
     /destroyed/,
   );
+});
+
+function makeMarkedBoard() {
+  return makeBoard(
+    new Map([
+      ["e2", { color: "white", role: "pawn" }],
+      ["d2", { color: "white", role: "pawn" }],
+    ]),
+    {
+      interaction: {
+        destinations: new Map([["e2", ["e3", "e4"]]]),
+        onEvent() {},
+      },
+      presentation: { selected: "e2" },
+    },
+  );
+}
+
+function destinationWrites(observer) {
+  return observer
+    .takeRecords()
+    .filter(
+      (record) =>
+        record.type === "attributes" &&
+        record.target.hasAttribute("data-mark") &&
+        record.attributeName === "data-destination",
+    );
+}
+
+test("move with update reconciles marks once", () => {
+  const { host, board, dom } = makeMarkedBoard();
+  const observer = new dom.window.MutationObserver(() => {});
+  observer.observe(host, {
+    attributes: true,
+    childList: true,
+    subtree: true,
+    attributeOldValue: true,
+  });
+
+  board.move("d2", "d4", {
+    interaction: {
+      destinations: new Map([["e2", ["e3", "e4"]]]),
+      onEvent() {},
+    },
+    presentation: { selected: "e2" },
+  });
+
+  assert.equal(destinationWrites(observer).length, 2);
+  assert.equal(host.querySelector('[data-square="d4"]')?.dataset.square, "d4");
+  assert.equal(host.querySelectorAll(".pw-mark").length, 3);
+});
+
+test("set with position, interaction and presentation reconciles marks once", () => {
+  const { host, board, dom } = makeMarkedBoard();
+  const observer = new dom.window.MutationObserver(() => {});
+  observer.observe(host, { attributes: true, childList: true, subtree: true });
+
+  board.set({
+    position: new Map([
+      ["e2", { color: "white", role: "pawn" }],
+      ["d4", { color: "white", role: "pawn" }],
+    ]),
+    interaction: {
+      destinations: new Map([["e2", ["e3", "e4"]]]),
+      onEvent() {},
+    },
+    presentation: { selected: "e2" },
+  });
+
+  assert.equal(destinationWrites(observer).length, 2);
+});
+
+test("two-argument move still renders marks", () => {
+  const { host, board, dom } = makeMarkedBoard();
+  const observer = new dom.window.MutationObserver(() => {});
+  observer.observe(host, { attributes: true, childList: true, subtree: true });
+
+  board.move("d2", "d4");
+
+  assert.equal(destinationWrites(observer).length, 2);
+  assert.deepEqual(
+    [...host.querySelectorAll('[data-mark="destination"]')].map(
+      (node) => node.dataset.destination,
+    ),
+    ["empty", "empty"],
+  );
+});
+
+test("move update rejects position and invalid fields atomically", () => {
+  const { host, board } = makeMarkedBoard();
+  assert.throws(
+    () => board.move("d2", "d4", { position: new Map() }),
+    /position/,
+  );
+  assert.throws(
+    () => board.move("d2", "d4", { annotations: "nope" }),
+    TypeError,
+  );
+  assert.equal(host.querySelector('[data-square="d2"]')?.dataset.square, "d2");
+});
+
+test("move with equal squares applies update only", () => {
+  const { host, board } = makeMarkedBoard();
+  board.move("e2", "e2", {
+    presentation: { lastMove: { from: "d2", to: "d4" } },
+  });
+  assert.equal(host.querySelectorAll('[data-mark="last-move-from"]').length, 1);
+  assert.equal(host.querySelectorAll('[data-mark="last-move-to"]').length, 1);
+  assert.equal(host.querySelector('[data-square="d2"]')?.dataset.square, "d2");
+});
+
+function countAnnotationWrites(dom, callback) {
+  const original = dom.window.Element.prototype.setAttribute;
+  const writes = [];
+  dom.window.Element.prototype.setAttribute = function (...args) {
+    if (this.closest(".pw-annotations")) writes.push(this);
+    return original.apply(this, args);
+  };
+  try {
+    callback();
+  } finally {
+    dom.window.Element.prototype.setAttribute = original;
+  }
+  return writes;
+}
+
+test("structurally equal annotations produce zero SVG writes", () => {
+  const annotations = [
+    { id: "a", kind: "arrow", from: "e2", to: "e4", layer: "user" },
+    { id: "b", kind: "circle", square: "d4", layer: "user", color: "#f00" },
+    { id: "c", kind: "circle", square: "c3", layer: "engine" },
+  ];
+  const { host, board, dom } = makeBoard(new Map(), { annotations });
+  const nodes = annotations.map((annotation) =>
+    host.querySelector(`[data-annotation-id="${annotation.id}"]`),
+  );
+  const writes = countAnnotationWrites(dom, () =>
+    board.set({
+      annotations: annotations.map((annotation) => ({ ...annotation })),
+    }),
+  );
+  assert.equal(writes.length, 0);
+  for (const [index, annotation] of annotations.entries()) {
+    assert.strictEqual(
+      host.querySelector(`[data-annotation-id="${annotation.id}"]`),
+      nodes[index],
+    );
+  }
+});
+
+test("annotation metadata-only changes produce zero SVG writes", () => {
+  const annotations = [
+    {
+      id: "engine",
+      kind: "arrow",
+      from: "e2",
+      to: "e4",
+      layer: "engine",
+      metadata: { score: 1 },
+    },
+  ];
+  const { board, dom } = makeBoard(new Map(), { annotations });
+  const writes = countAnnotationWrites(dom, () =>
+    board.set({
+      annotations: [{ ...annotations[0], metadata: { score: 1.2 } }],
+    }),
+  );
+  assert.equal(writes.length, 0);
+});
+
+test("one changed annotation writes only its node", () => {
+  const annotations = [
+    ...Array.from({ length: 30 }, (_, index) => ({
+      id: `user-${index}`,
+      kind: "circle",
+      square: "a1",
+      layer: "user",
+    })),
+    {
+      id: "engine",
+      kind: "arrow",
+      from: "e2",
+      to: "e4",
+      layer: "engine",
+      color: "#0f0",
+    },
+  ];
+  const { host, board, dom } = makeBoard(new Map(), { annotations });
+  const nodes = new Map(
+    annotations.map((annotation) => [
+      annotation.id,
+      host.querySelector(`[data-annotation-id="${annotation.id}"]`),
+    ]),
+  );
+  const writes = countAnnotationWrites(dom, () =>
+    board.set({
+      annotations: annotations.map((annotation) =>
+        annotation.id === "engine"
+          ? { ...annotation, color: "#f00" }
+          : { ...annotation },
+      ),
+    }),
+  );
+  assert.ok(writes.length > 0);
+  assert.equal(
+    writes.every(
+      (node) => node.getAttribute("data-annotation-id") === "engine",
+    ),
+    true,
+  );
+  for (const [id, node] of nodes) {
+    assert.strictEqual(
+      host.querySelector(`[data-annotation-id="${id}"]`),
+      node,
+    );
+  }
 });
 
 // Slice-02: pointer drag-to-move
@@ -1811,6 +2027,9 @@ test("renders SVG piece sets and square themes with glyph fallback", () => {
   board.set({ theme: null });
   assert.equal(el.style.getPropertyValue("--pw-light-square"), "");
   assert.equal(el.style.getPropertyValue("--pw-dark-square"), "");
+});
+test("exports individual vendored piece sets", () => {
+  assert.match(cburnett.wK, /^\s*<\?xml/);
 });
 
 test("renders the vendored default piece set without a pieceSet option", () => {

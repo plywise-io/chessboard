@@ -193,7 +193,9 @@ The renderer exposes CSS custom properties on `.pw-board`:
 | `--pw-light-square` | Light square color |
 | `--pw-dark-square` | Dark square color |
 | `--pw-animation-duration` | Transition duration for piece movement |
-| `--pw-coordinate-color` | Coordinate label color (defaults to opposite-square parity contrast) |
+| `--pw-coordinate-color` | Coordinate label color for both square parities |
+| `--pw-coordinate-on-light` | Coordinate label color on light squares |
+| `--pw-coordinate-on-dark` | Coordinate label color on dark squares |
 | `--pw-selected-color` | Selected square color |
 | `--pw-destination-color` | Empty destination color |
 | `--pw-capture-color` | Occupied destination color |
@@ -317,6 +319,6 @@ runnable story with controls.
 
 ## Benchmarks
 
-`npm run bench` runs a reproducible Chromium benchmark against an approved-move, 1,000-position-update, arbitrary-replacement, annotation-replacement, 32/50-board, and 60/120 Hz drag-coalescing workload. It uses the existing Vite and Playwright toolchain (no benchmark framework or new runtime dependency), reports deterministic median/p95/p99 JS duration plus board-owned created/removed node counts, and writes `benchmarks/report.json` together with the same JSON on stdout. Timing is advisory; correctness failures still fail the command. Override `PW_BENCH_SAMPLES`, `PW_BENCH_WARMUP`, `PW_BENCH_ITERATIONS`, `PW_BENCH_DRAG_FRAMES_60`, `PW_BENCH_DRAG_FRAMES_120`, or `PW_BENCH_PORT` to retune.
+`npm run bench` runs a reproducible Chromium benchmark against approved moves, 1,000-position updates, arbitrary replacements, annotation replacements, 32/50-board throughput, and 60/120 Hz drag input. It reports deterministic median/p95/p99 synchronous JS durations where applicable, aggregate board-owned DOM mutation counts, and drag-input delivery cadence; it writes `benchmarks/report.json` together with the same JSON on stdout. Timing is advisory; correctness assertions and multi-board viewport visibility fail the command.
 
 After the initial release, user-visible package changes require `npm run changeset`. The manually triggered release workflow opens versioning pull requests and publishes through npm trusted publishing; the npm organization must authorize `.github/workflows/release.yml` before it is run.

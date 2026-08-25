@@ -8,6 +8,8 @@
   --pw-capture-color: rgba(20, 85, 180, 0.6);
   --pw-last-move-color: rgba(155, 199, 0, 0.41);
   --pw-check-color: rgba(230, 0, 0, 0.65);
+  --pw-coordinate-on-light: #1f1f1f;
+  --pw-coordinate-on-dark: #1f1f1f;
   position: relative;
   box-sizing: border-box;
   width: 100%;
@@ -54,6 +56,11 @@
    * instant; a newer update retargets the running transition. Dragging
    * suppresses this inline. */
   transition: transform var(--pw-animation-duration) var(--pw-animation-easing);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pw-piece {
+    transition: none;
+  }
 }
 
 .pw-piece[data-color="black"] {
@@ -197,12 +204,11 @@
   justify-content: flex-start;
 }
 
-/* Labels default to the opposite square color so they always contrast
- * with the square they sit on; --pw-coordinate-color overrides both. */
+/* Custom themes may override each parity independently. */
 .pw-coordinate[data-parity="light"] {
-  color: var(--pw-coordinate-color, var(--pw-dark-square));
+  color: var(--pw-coordinate-color, var(--pw-coordinate-on-light));
 }
 
 .pw-coordinate[data-parity="dark"] {
-  color: var(--pw-coordinate-color, var(--pw-light-square));
+  color: var(--pw-coordinate-color, var(--pw-coordinate-on-dark));
 }

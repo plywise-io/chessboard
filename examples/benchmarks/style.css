@@ -22,8 +22,10 @@ main {
 
 .pw-bench-arena {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 1rem;
+  /* Min size 96px keeps all 50 boards in-viewport at the bench runner's
+     1280x900 default; the layout still adapts to wider viewports. */
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.75rem;
   align-items: start;
 }
 

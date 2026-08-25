@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-08-23T13:38:59.618Z",
+  "generatedAt": "2026-08-23T21:01:57.920Z",
   "environment": {
     "platform": "linux 7.1.4-200.fc44.x86_64 x64",
     "cpu": "AMD Ryzen 9 5950X 16-Core Processor",
     "cpuCount": 32,
     "playwright": "1.62.1",
     "vite": "8.2.2",
-    "chessboard": "0.1.0",
-    "reactAdapter": "0.1.0",
+    "chessboard": "0.3.2",
+    "reactAdapter": "0.2.0",
     "browser": "chromium 151.0.7922.34",
     "samples": 30,
     "warmup": 3
@@ -16,11 +16,11 @@
     {
       "name": "ordinaryApprovedMove",
       "duration": {
-        "median": 0,
-        "p95": 0.10000000149011612,
-        "p99": 0.20000000298023224,
+        "median": 0.10000000149011612,
+        "p95": 0.20000000298023224,
+        "p99": 5.899999998509884,
         "min": 0,
-        "max": 0.20000000298023224,
+        "max": 5.899999998509884,
         "count": 30
       },
       "nodes": {
@@ -32,35 +32,43 @@
     {
       "name": "bulkNavigation",
       "iterations": 1000,
-      "duration": {
-        "median": 5.700000001117587,
-        "p95": 7.599999997764826,
-        "p99": 12,
-        "min": 5.300000000745058,
-        "max": 12,
+      "iterationsPerSample": 25,
+      "batchDuration": {
+        "median": 1,
+        "p95": 1.8999999985098839,
+        "p99": 3.2000000029802322,
+        "min": 0.7000000029802322,
+        "max": 3.2000000029802322,
         "count": 40
       },
-      "perSampleIterations": 25,
+      "perIteration": {
+        "median": 0,
+        "p95": 0.10000000149011612,
+        "p99": 0.20000000298023224,
+        "min": 0,
+        "max": 2.399999998509884,
+        "count": 1000
+      },
       "nodes": {
-        "created": 999,
-        "removed": 1000,
-        "attributeRecords": 90004
+        "created": 1000,
+        "removed": 1001,
+        "attributeRecords": 0
       }
     },
     {
       "name": "arbitraryReplacement",
       "duration": {
-        "median": 0.30000000074505806,
-        "p95": 0.6000000014901161,
-        "p99": 0.9000000022351742,
-        "min": 0.19999999925494194,
-        "max": 0.9000000022351742,
+        "median": 0.20000000298023224,
+        "p95": 0.30000000447034836,
+        "p99": 0.3999999985098839,
+        "min": 0.09999999403953552,
+        "max": 0.3999999985098839,
         "count": 30
       },
       "nodes": {
         "created": 29,
         "removed": 29,
-        "attributeRecords": 4501
+        "attributeRecords": 1798
       }
     },
     {
@@ -84,20 +92,31 @@
       "boardCount": 32,
       "iterations": 50,
       "duration": {
-        "median": 7.950000001117587,
-        "p95": 8.599999997764826,
-        "p99": 8.600000001490116,
-        "min": 7.699999999254942,
-        "max": 8.600000001490116,
+        "median": 1.800000000745058,
+        "p95": 2.899999998509884,
+        "p99": 3.7999999970197678,
+        "min": 1.3999999985098839,
+        "max": 3.7999999970197678,
         "count": 20
       },
       "nodes": {
         "created": 608,
         "removed": 608,
-        "attributeRecords": 57696
+        "attributeRecords": 0
       },
       "correctness": {
-        "boardCount": 32
+        "boardCount": 32,
+        "visibility": {
+          "requestedViewport": {
+            "width": 1280,
+            "height": 900
+          },
+          "boardCount": 32,
+          "lastBoardBottom": 488.15625,
+          "lastBoardRight": 1142.90625,
+          "firstBoardTop": 160.875,
+          "firstBoardLeft": 24
+        }
       }
     },
     {
@@ -105,76 +124,69 @@
       "boardCount": 50,
       "iterations": 50,
       "duration": {
-        "median": 12.449999999254942,
-        "p95": 16.800000000745058,
-        "p99": 18.300000000745058,
-        "min": 11.199999999254942,
-        "max": 18.300000000745058,
+        "median": 3.400000002235174,
+        "p95": 5.100000001490116,
+        "p99": 16.100000001490116,
+        "min": 2.2999999970197678,
+        "max": 16.100000001490116,
         "count": 20
       },
       "nodes": {
         "created": 950,
         "removed": 950,
-        "attributeRecords": 90150
+        "attributeRecords": 0
       },
       "correctness": {
-        "boardCount": 50
+        "boardCount": 50,
+        "visibility": {
+          "requestedViewport": {
+            "width": 1280,
+            "height": 900
+          },
+          "boardCount": 50,
+          "lastBoardBottom": 714.328125,
+          "lastBoardRight": 690.53125,
+          "firstBoardTop": 160.875,
+          "firstBoardLeft": 24
+        }
       }
     },
     {
-      "name": "dragCoalescing",
+      "name": "dragInput",
       "rateHz": 60,
       "framesRequested": 240,
       "pointerEvents": 241,
-      "coalescedFrames": 244,
-      "duration": {
-        "median": 16.699999999254942,
-        "p95": 16.800000000745058,
-        "p99": 16.800000000745058,
-        "min": 1.2000000029802322,
-        "max": 16.900000002235174,
-        "count": 243
-      },
-      "perEvent": {
-        "median": 16.699999999254942,
-        "p95": 16.800000000745058,
-        "p99": 16.800000000745058,
-        "min": 16.300000000745058,
-        "max": 16.900000002235174,
+      "pointerInterval": {
+        "median": 16.69999999552965,
+        "p95": 16.80000000447035,
+        "p99": 17.5,
+        "min": 5.199999995529652,
+        "max": 33.5,
         "count": 240
       },
       "nodes": {
-        "created": 0,
-        "removed": 0,
-        "attributeRecords": 233
+        "created": 1,
+        "removed": 1,
+        "attributeRecords": 225
       }
     },
     {
-      "name": "dragCoalescing",
+      "name": "dragInput",
       "rateHz": 120,
       "framesRequested": 240,
       "pointerEvents": 241,
-      "coalescedFrames": 241,
-      "duration": {
-        "median": 16.699999999254942,
-        "p95": 16.800000000745058,
-        "p99": 16.899999998509884,
-        "min": 16.199999999254942,
-        "max": 17.199999999254942,
-        "count": 240
-      },
-      "perEvent": {
-        "median": 16.699999999254942,
-        "p95": 16.800000000745058,
-        "p99": 16.900000002235174,
-        "min": 16.299999997019768,
-        "max": 17,
+      "pointerInterval": {
+        "median": 16.69999999552965,
+        "p95": 16.80000000447035,
+        "p99": 16.80000000447035,
+        "min": 14.600000001490116,
+        "max": 19,
         "count": 240
       },
       "nodes": {
-        "created": 0,
-        "removed": 0,
-        "attributeRecords": 233
+        "created": 1,
+        "removed": 1,
+        "attributeRecords": 225
       }
     }
   ],

@@ -192,7 +192,10 @@ Override the CSS custom properties on `.pw-board` to theme squares, marks, and a
   --pw-light-square: #f0d9b5;
   --pw-dark-square: #b58863;
   --pw-animation-duration: 150ms;
-  /* --pw-coordinate-color: #6b4226; omit for square-parity contrast */
+  /* --pw-animation-easing: cubic-bezier(0.65, 0, 0.35, 1); */
+  /* --pw-coordinate-color: #1f1f1f; override both parities */
+  /* --pw-coordinate-on-light: #1f1f1f; custom theme light-square label */
+  /* --pw-coordinate-on-dark: #1f1f1f; custom theme dark-square label */
   --pw-selected-color: rgba(20, 85, 30, 0.45);
   --pw-destination-color: rgba(20, 85, 30, 0.30);
   --pw-capture-color: rgba(150, 30, 30, 0.40);
@@ -202,7 +205,7 @@ Override the CSS custom properties on `.pw-board` to theme squares, marks, and a
 }
 ```
 
-`coordinates: true` renders a–h / 1–8 edge labels that follow the orientation; `coordinates: false` (the default) renders none. Labels default to the opposite square colour for contrast; set `--pw-coordinate-color` to override both parities.
+`coordinates: true` renders a–h / 1–8 edge labels that follow the orientation; `coordinates: false` (the default) renders none. Default labels use contrasting colors for the built-in board. Custom themes can set `--pw-coordinate-on-light` and `--pw-coordinate-on-dark` independently; `--pw-coordinate-color` overrides both parities.
 
 `animationMs: 0` switches to instant updates. A newer approved move or position update retargets the active transition; transitions are not queued. Position updates reconcile by piece identity, so a piece that changed squares keeps its DOM node and glides; a captured piece disappears when the mover arrives.
 

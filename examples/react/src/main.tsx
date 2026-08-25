@@ -383,7 +383,12 @@ function App() {
           Reset position
         </button>
       </div>
-      <p className="status" data-testid="last-event">
+      <p
+        className="status"
+        data-testid="last-event"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         Last event: {lastEvent}
       </p>
       <p className="status" data-testid="orientation">

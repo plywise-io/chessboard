@@ -1,5 +1,11 @@
 # @plywise/chessboard
 
+## 0.4.1
+
+### Patch Changes
+
+- 7d17194: Clarify that controlled selection must be fed back before keyboard navigation can emit a move.
+
 ## 0.4.0
 
 ### Minor Changes

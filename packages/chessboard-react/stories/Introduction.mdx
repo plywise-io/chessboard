@@ -1,0 +1,57 @@
+import { Meta } from "@storybook/addon-docs";
+
+<Meta title="Introduction" />
+
+# Plywise Chessboard
+
+A framework-agnostic, dependency-free chessboard renderer with a small React
+adapter. The renderer owns its DOM subtree; the caller owns chess rules,
+FEN/PGN parsing, move legality, game state, and annotation semantics.
+
+- `@plywise/chessboard` — DOM renderer and TypeScript interface. Zero runtime
+  dependencies.
+- `@plywise/chessboard-react` — lifecycle adapter for React 18 and 19.
+
+## Live API reference
+
+This Storybook is the living reference. Every feature has a runnable story
+with controls. Start with **Chessboard/Default**, then jump into the recipe
+folder for end-to-end examples.
+
+## Recipes
+
+- **ChessJsIntegration** — wire `@plywise/chessboard` to the `chess.js` engine
+  for legal-move generation, FEN handling, and PGN round-trips.
+- **Theming** — override the documented CSS custom properties and `theme`
+  prop to recolour squares, marks, and annotations.
+- **Accessibility** — opt into keyboard navigation, custom labels, and the
+  polite live region that announces the focused square.
+- **AnnotationLayers** — keep caller-owned arrows and circles keyed by `id`,
+  toggle layer visibility without losing state.
+- **PieceSets** — cycle between the curated `pieceSets.*` catalogs, your own
+  self-hosted SVG base URL, or the Unicode glyphs fallback.
+
+## Get started
+
+```sh
+npm install @plywise/chessboard @plywise/chessboard-react
+```
+
+```tsx
+import "@plywise/chessboard/style.css";
+import { Chessboard } from "@plywise/chessboard-react";
+
+export function Board({ position, onEvent }) {
+  return (
+    <Chessboard
+      position={position}
+      interaction={{ destinations, onEvent }}
+    />
+  );
+}
+```
+
+The renderer never accepts a move on the caller's behalf. Pointer gestures
+express an *intention*; only the caller's subsequent move or `set({ position })`
+mutates authoritative state. See the recipe stories for the patterns real
+products use.

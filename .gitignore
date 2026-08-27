@@ -10,3 +10,4 @@ docs/agents/
 .omp/
 .idea/
 *.tsbuildinfo
+storybook-static/

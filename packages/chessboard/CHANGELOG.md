@@ -1,5 +1,11 @@
 # @plywise/chessboard
 
+## 0.4.2
+
+### Patch Changes
+
+- 8f91a6b: Keep a keyboard selection active through the next key press so a configured destination emits a move without requiring a presentation update.
+
 ## 0.4.1
 
 ### Patch Changes

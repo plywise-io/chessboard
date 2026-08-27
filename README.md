@@ -106,7 +106,7 @@ The renderer never accepts a move on the caller's behalf. Pointer gestures expre
 
 - Pointer Events are the default input source. Mouse, touch, and pen share one path through `setPointerCapture`. Set `interaction.keyboard: true` to add keyboard input alongside pointer gestures; see [Accessibility](#accessibility).
 - Selecting a square whose source is in `interaction.destinations` emits `{ type: "select", square, origin: "pointer" }`. With `keyboard: true`, Enter or Space on the same square emits the same event with `origin: "keyboard"`.
-  Feed a `select` event back as `presentation.selected` before a second selection can resolve as a move; selecting any square not listed in that source's destinations emits `clear`.
+  Keyboard selection remains active through the next key press, so Enter or Space on a configured destination emits `move` without waiting for a presentation update. Selecting any other square emits `clear`.
 - Selecting the active source again, a non-source square, or an empty area outside the board emits `{ type: "clear", origin: "pointer" }`. Escape on a focused keyboard cursor emits the same event with `origin: "keyboard"`.
 - Selecting a destination square for the active source emits `{ type: "move", from, to, origin: "selection" }`. Enter or Space on a destination while a keyboard cursor sits there emits the same event with `origin: "keyboard"`.
 - Pressing a piece, dragging across squares, and releasing on a destination emits `{ type: "move", from, to, origin: "drag" }`.

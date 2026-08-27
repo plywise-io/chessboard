@@ -423,6 +423,9 @@ export function createChessboard(
   };
   let draw: DrawState | null = null;
   let keyboardCursor: Square | null = null;
+  // Keeps a keyboard source through the next key event while callers update
+  // controlled presentation state asynchronously.
+  let keyboardSelected: Square | undefined;
 
   const board = host.ownerDocument.createElement("div");
   const view = host.ownerDocument.defaultView;
@@ -1003,33 +1006,39 @@ export function createChessboard(
   ): InteractionEvent | null {
     if (!interaction) return null;
     const dests = destinations;
-    const inSelectedDests = selected
-      ? (dests.get(selected)?.includes(target) ?? false)
+    const activeSelected =
+      origin === "keyboard" ? (keyboardSelected ?? selected) : selected;
+    const inSelectedDests = activeSelected
+      ? (dests.get(activeSelected)?.includes(target) ?? false)
       : false;
 
-    if (selected && inSelectedDests && selected !== target) {
+    if (activeSelected && inSelectedDests && activeSelected !== target) {
       // The click resolves this gesture; it must not promote to a drag.
       drag = null;
+      keyboardSelected = undefined;
       const event: MoveEvent = {
         type: "move",
-        from: selected,
+        from: activeSelected,
         to: target,
         origin: origin === "keyboard" ? "keyboard" : "selection",
       };
       interaction.onEvent(event);
       return event;
     }
-    if (selected === target) {
+    if (activeSelected === target) {
       drag = null;
+      keyboardSelected = undefined;
       const event: ClearEvent = { type: "clear", origin };
       interaction.onEvent(event);
       return event;
     }
     if (dests.has(target)) {
+      if (origin === "keyboard") keyboardSelected = target;
       const event: SelectEvent = { type: "select", square: target, origin };
       interaction.onEvent(event);
       return event;
     }
+    keyboardSelected = undefined;
     const event: ClearEvent = { type: "clear", origin };
     interaction.onEvent(event);
     return event;
@@ -1309,6 +1318,7 @@ export function createChessboard(
       pieceSet = validatePieceSet(update.pieceSet);
     }
     if (plan.interactionChanged) {
+      keyboardSelected = undefined;
       if (update.interaction === null) {
         clearDragVisual();
         clearDrawVisual();
@@ -1321,6 +1331,7 @@ export function createChessboard(
       }
     }
     if (plan.presentationChanged) {
+      keyboardSelected = undefined;
       const next = validatePresentation(update.presentation as Presentation);
       selected = next.selected;
       lastMove = next.lastMove;

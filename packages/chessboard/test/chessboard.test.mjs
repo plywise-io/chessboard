@@ -2681,9 +2681,8 @@ test("keyboard: Enter on a destination after select emits move with keyboard ori
   }
   dispatchKey(host, "ArrowUp");
   dispatchKey(host, "Enter"); // select e2
-  // Selection is controlled: the caller feeds it back before the
-  // destination resolves as a move target.
-  board.set({ presentation: { selected: "e2" } });
+  // Keyboard selection survives the event callback so a second press can
+  // resolve the configured destination without a render round-trip.
   dispatchKey(host, "ArrowUp");
   dispatchKey(host, "ArrowUp");
   dispatchKey(host, "Enter"); // move to e4

@@ -1,0 +1,54 @@
+name: Feature request
+description: Propose a new public API, behaviour, or built-in asset.
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      description: Which package would the change live in?
+      options:
+        - "@plywise/chessboard (renderer)"
+        - "@plywise/chessboard-react (React adapter)"
+        - "Both"
+        - "New package"
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: What problem does this solve? Who is the user and what are they trying to do today that they cannot?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: Sketch the proposed signature, prop, or option. Code snippets over prose.
+      placeholder: |
+        // Example shape
+        board.set({ animationMs: 200, easing: "ease-out" });
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other shapes you considered and why this one is better. If you considered "do nothing," say so.
+    validations:
+      required: false
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Renderer boundary
+      description: Does the change cross the renderer boundary (renderer owns DOM, caller owns rules)? If yes, where, and how does it preserve the existing contract?
+    validations:
+      required: true
+  - type: textarea
+    id: breaking
+    attributes:
+      label: Breaking change?
+      description: Does this require a major version bump? What existing callers would break, and why is that acceptable?
+    validations:
+      required: false

@@ -1,0 +1,18 @@
+name: Question
+description: Usage question or help request.
+labels: ["question"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to do? Include the relevant code, your renderer config, and what you have already tried.
+    validations:
+      required: true
+  - type: textarea
+    id: docs
+    attributes:
+      label: Documentation
+      description: Link the doc page you read (README, package README, Storybook story) and what was missing or unclear.
+    validations:
+      required: false

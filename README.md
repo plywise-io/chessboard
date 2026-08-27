@@ -1,7 +1,16 @@
 # Plywise Chessboard
 
+[![CI](https://img.shields.io/github/actions/workflow/status/plywise-io/chessboard/ci.yml?branch=main)](https://github.com/plywise-io/chessboard/actions)
+[![npm](https://img.shields.io/npm/v/@plywise/chessboard)](https://www.npmjs.com/package/@plywise/chessboard)
+[![License](https://img.shields.io/npm/l/@plywise/chessboard)](./LICENSE)
+
+![Plywise Chessboard in motion](./docs/hero.gif)
+
 A framework-agnostic, dependency-free chessboard renderer with a small React adapter. The renderer owns DOM updates and exposes a controlled interactive surface; the caller owns chess rules, FEN/PGN parsing, move legality, game state, and annotation semantics.
 
+> **Live API reference:** [plywise-io.github.io/chessboard](https://plywise-io.github.io/chessboard/) — every feature has a runnable story with controls.
+
+**Quick links:** [Packages](#packages) · [Architecture](#architecture) · [Usage](#usage) · [Theming](#theming-variables) · [Accessibility](#accessibility) · [React adapter](#react-adapter) · [Storybook recipes](https://plywise-io.github.io/chessboard/?path=/docs/introduction--docs)
 ## Packages
 
 - `@plywise/chessboard`: DOM renderer and its TypeScript interface. Zero runtime dependencies.
@@ -294,13 +303,14 @@ Re-exported domain types include `Color`, `CoordinatesMode`, `File`, `Rank`, `Ro
 
 ## Support contract
 
+
 - ESM-only packages with TypeScript declarations; CommonJS `require` is not supported.
 - `@plywise/chessboard-react` supports React 18 and 19 and does not install a second React copy.
 - Current stable Chrome, Edge, Firefox, and Safari are the browser target. Legacy browsers are not supported.
 - Node.js 22 and npm 11.17 are required for repository development and publishing, not for browser runtime.
 - Styles are opt-in through `@plywise/chessboard/style.css`.
 
-## Out of scope
+## Development
 
 
 ```sh

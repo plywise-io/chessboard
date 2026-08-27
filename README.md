@@ -106,6 +106,7 @@ The renderer never accepts a move on the caller's behalf. Pointer gestures expre
 
 - Pointer Events are the default input source. Mouse, touch, and pen share one path through `setPointerCapture`. Set `interaction.keyboard: true` to add keyboard input alongside pointer gestures; see [Accessibility](#accessibility).
 - Selecting a square whose source is in `interaction.destinations` emits `{ type: "select", square, origin: "pointer" }`. With `keyboard: true`, Enter or Space on the same square emits the same event with `origin: "keyboard"`.
+  Feed a `select` event back as `presentation.selected` before a second selection can resolve as a move; selecting any square not listed in that source's destinations emits `clear`.
 - Selecting the active source again, a non-source square, or an empty area outside the board emits `{ type: "clear", origin: "pointer" }`. Escape on a focused keyboard cursor emits the same event with `origin: "keyboard"`.
 - Selecting a destination square for the active source emits `{ type: "move", from, to, origin: "selection" }`. Enter or Space on a destination while a keyboard cursor sits there emits the same event with `origin: "keyboard"`.
 - Pressing a piece, dragging across squares, and releasing on a destination emits `{ type: "move", from, to, origin: "drag" }`.
@@ -332,4 +333,10 @@ runnable story with controls.
 
 `npm run bench` runs a reproducible Chromium benchmark against approved moves, 1,000-position updates, arbitrary replacements, annotation replacements, 32/50-board throughput, and 60/120 Hz drag input. It reports deterministic median/p95/p99 synchronous JS durations where applicable, aggregate board-owned DOM mutation counts, and drag-input delivery cadence; it writes `benchmarks/report.json` together with the same JSON on stdout. Timing is advisory; correctness assertions and multi-board viewport visibility fail the command.
 
-After the initial release, user-visible package changes require `npm run changeset`. The manually triggered release workflow opens versioning pull requests and publishes through npm trusted publishing; the npm organization must authorize `.github/workflows/release.yml` before it is run.
+## Community
+
+- [Code of Conduct](./.github/CODE_OF_CONDUCT.md)
+- [Bug reports and feature requests](https://github.com/plywise-io/chessboard/issues/new/choose)
+- [Storybook](https://plywise-io.github.io/chessboard/) — interactive API reference
+
+After the initial release

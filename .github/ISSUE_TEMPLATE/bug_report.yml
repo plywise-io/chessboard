@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in the renderer or React adapter is broken or behaving unexpectedly.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      description: Which package is the bug in?
+      options:
+        - "@plywise/chessboard (renderer)"
+        - "@plywise/chessboard-react (React adapter)"
+        - "Both / unclear"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `npm ls @plywise/chessboard @plywise/chessboard-react` from your project.
+      placeholder: "@plywise/chessboard@0.4.0, @plywise/chessboard-react@0.3.0"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      description: e.g. Chrome 130 on macOS 15. Include the browser version, not just the name.
+      placeholder: Chrome 130.0.6723.92 on macOS 15.0
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Smallest code or steps that reproduce the bug. Link to a repo or CodeSandbox if possible.
+      placeholder: |
+        import { createChessboard } from "@plywise/chessboard";
+        const board = createChessboard(host, { position: new Map([["e2", { color: "white", role: "pawn" }]]) });
+        board.set({ position: new Map([["e4", { color: "white", role: "pawn" }]]) });
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behaviour
+      description: What actually happened. Include any console output, screenshots, or error messages.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: "Anything else that might matter: orientation, piece set, theme, interaction config, etc."
+    validations:
+      required: false
